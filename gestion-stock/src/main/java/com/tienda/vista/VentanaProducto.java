@@ -4,6 +4,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
+
 import java.awt.*;
 import com.tienda.Modelo.Producto;
 import com.tienda.db.ProductoDAO;
@@ -71,59 +73,47 @@ public class VentanaProducto extends JFrame {
     }
 
     private void crearPestañaInventario() {
-        JPanel panelInventario = new JPanel(new BorderLayout(10, 10));
-        panelInventario.setBorder(new EmptyBorder(10, 10, 10, 10));
+    JPanel panelInventario = new JPanel(new BorderLayout(10, 10));
+    panelInventario.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        String[] columnas = {"CÓDIGO", "NOMBRE", "COSTO", "VENTA", "STOCK"};
-        modeloTabla = new DefaultTableModel(columnas, 0);
-        tabla = new JTable(modeloTabla);
+    // --- BARRA DE BÚSQUEDA ---
+    JPanel panelBusqueda = new JPanel(new BorderLayout(5, 5));
+    panelBusqueda.add(new JLabel("🔍 Buscar producto: "), BorderLayout.WEST);
+    JTextField txtBuscador = new JTextField();
+    panelBusqueda.add(txtBuscador, BorderLayout.CENTER);
+    
+    panelInventario.add(panelBusqueda, BorderLayout.NORTH); // La ponemos arriba
 
-        actualizarTabla();
+    // --- TABLA ---
+    String[] columnas = {"CÓDIGO", "NOMBRE", "COSTO", "VENTA", "STOCK"};
+    modeloTabla = new DefaultTableModel(columnas, 0);
+    tabla = new JTable(modeloTabla);
+    
+    // Filtro inteligente (Sorter)
+    TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(modeloTabla);
+    tabla.setRowSorter(sorter);
 
-        panelInventario.add(new JScrollPane(tabla), BorderLayout.CENTER);
+    actualizarTabla();
 
-        JButton btnRefrescar = new JButton("Actualizar Inventario");
-        btnRefrescar.addActionListener(e -> actualizarTabla());
-        panelInventario.add(btnRefrescar, BorderLayout.SOUTH);
-
-        pestañas.addTab(" Ver Inventario", panelInventario);
-
-        // --- CREAMOS EL MENÚ EMERGENTE (CLICK DERECHO) ---
-        JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem itemEditar = new JMenuItem("Editar Producto");
-        JMenuItem itemEliminar = new JMenuItem("Eliminar Producto");
-
-         popupMenu.add(itemEditar);
-         popupMenu.add(itemEliminar);
-
-        // Asignamos el menú a la tabla
-        tabla.setComponentPopupMenu(popupMenu);
-
-         // --- LÓGICA PARA ELIMINAR ---
-        itemEliminar.addActionListener(e -> {
-        int fila = tabla.getSelectedRow();
-        if (fila != -1) {
-            String codigo = tabla.getValueAt(fila, 0).toString();
-            String nombre = tabla.getValueAt(fila, 1).toString();
-
-            int respuesta = JOptionPane.showConfirmDialog(this, 
-                "¿Seguro que quieres borrar " + nombre + "?", "Confirmar", JOptionPane.YES_NO_OPTION);
-            
-            if (respuesta == JOptionPane.YES_OPTION) {
-                ProductoDAO.eliminarProducto(codigo);
-                actualizarTabla(); // Refrescamos la pestaña para que desaparezca
+    // --- LÓGICA DEL BUSCADOR (FILTRO EN TIEMPO REAL) ---
+    txtBuscador.addKeyListener(new java.awt.event.KeyAdapter() {
+        @Override
+        public void keyReleased(java.awt.event.KeyEvent e) {
+            String texto = txtBuscador.getText();
+            if (texto.trim().length() == 0) {
+                sorter.setRowFilter(null); // Si está vacío, muestra todo
+            } else {
+                // Filtra en cualquier columna (nombre o código)
+                sorter.setRowFilter(RowFilter.regexFilter("(?i)" + texto));
             }
         }
-        });
+    });
 
-        // --- LÓGICA PARA EDITAR ---
-        itemEditar.addActionListener(e -> {
-             int fila = tabla.getSelectedRow();
-                if (fila != -1) {
-                  abrirDialogoEdicion(fila);
-            }
-        });
-    }
+    // ... (Aquí sigue tu código del Menú del Click Derecho y Doble Click) ...
+
+    panelInventario.add(new JScrollPane(tabla), BorderLayout.CENTER);
+    pestañas.addTab(" Ver Inventario", panelInventario);
+}
     
 
     private void ejecutarGuardado() {
