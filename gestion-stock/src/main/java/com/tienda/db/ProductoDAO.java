@@ -2,6 +2,7 @@ package com.tienda.db;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import com.tienda.Modelo.Producto;
@@ -102,4 +103,32 @@ public static void actualizarProducto(Producto p) {
         System.out.println("Error al actualizar: " + e.getMessage());
     }
 }
+
+        // Busca un solo producto por código
+    public static Producto buscarPorCodigo(String codigo) {
+     String sql = "SELECT * FROM productos WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             pstmt.setString(1, codigo);
+             ResultSet rs = pstmt.executeQuery();
+             if (rs.next()) {
+                Producto p = new Producto(rs.getString("codigo_barras"), rs.getString("nombre"), 
+                rs.getDouble("precio_costo"), rs.getInt("stock"), 0);
+                p.setPrecioVenta(rs.getDouble("precio_venta"));
+                return p;
+            }
+         } catch (SQLException e) { System.out.println(e.getMessage()); }
+    return null;
+}
+
+        // Resta stock tras una venta
+    public static void reducirStock(String codigo, int cantidad) {
+        String sql = "UPDATE productos SET stock = stock - ? WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, cantidad);
+            pstmt.setString(2, codigo);
+            pstmt.executeUpdate();
+        } catch (SQLException e) { System.out.println(e.getMessage()); }
+    }
 }
