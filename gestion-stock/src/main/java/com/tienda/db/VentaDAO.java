@@ -67,4 +67,18 @@ public class VentaDAO {
         }
         return lista;
     }
+
+    // Obtener la suma total de dinero vendido históricamente
+    public static double obtenerTotalVentasHistorico() {
+        crearTablaVentas();
+        String sql = "SELECT SUM(total) as gran_total FROM ventas";
+        try (Connection conn = ConexionDB.conectar();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) return rs.getDouble("gran_total");
+        } catch (SQLException e) {
+            System.out.println("Error calculando total: " + e.getMessage());
+        }
+        return 0.0;
+    }
 }

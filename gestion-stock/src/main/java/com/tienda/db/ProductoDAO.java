@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 import com.tienda.Modelo.Producto;
 
@@ -130,5 +131,33 @@ public static void actualizarProducto(Producto p) {
             pstmt.setString(2, codigo);
             pstmt.executeUpdate();
         } catch (SQLException e) { System.out.println(e.getMessage()); }
+    }
+
+    // 6. Contar cuántos productos distintos hay registrados
+    public static int obtenerTotalProductosRegistrados() {
+        String sql = "SELECT COUNT(*) as total FROM productos";
+        try (Connection conn = ConexionDB.conectar();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) return rs.getInt("total");
+        } catch (SQLException e) {
+            System.out.println("Error contando productos: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    // Contar cuántos productos tienen el stock por debajo de un límite (ej. 5)
+    public static int obtenerProductosBajoStock(int limite) {
+        String sql = "SELECT COUNT(*) as total FROM productos WHERE stock <= ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, limite);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) return rs.getInt("total");
+            }
+        } catch (SQLException e) {
+            System.out.println("Error contando bajo stock: " + e.getMessage());
+        }
+        return 0;
     }
 }
