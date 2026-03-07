@@ -30,10 +30,14 @@ public class VentanaProducto extends JFrame {
     private double totalVenta = 0;
     private JTextField txtPagaCon;
     private JLabel lblVuelto;
+    
+    // NUEVAS GLOBALES PARA EL HISTORIAL Y PAGOS (PASO 3A y 3B)
+    private JComboBox<String> cbMetodoPago; 
+    private DefaultTableModel modeloHistorial;
 
     public VentanaProducto() {
         setTitle("Sistema de Gestión de Stock y Ventas");
-        setSize(900, 650); // Lo hice un poquito más grande para que entre todo cómodo
+        setSize(900, 650); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -42,8 +46,25 @@ public class VentanaProducto extends JFrame {
         crearPestañaRegistro();
         crearPestañaInventario();
         crearPestañaVentas();
+        
+        // PASO 3C: LLAMAMOS A LA NUEVA PESTAÑA
+        crearPestañaHistorial(); 
 
-        add(pestañas);
+        // --- RELOJ EN TIEMPO REAL ---
+        JLabel lblReloj = new JLabel();
+        lblReloj.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lblReloj.setForeground(new Color(52, 73, 94)); 
+        lblReloj.setHorizontalAlignment(SwingConstants.RIGHT);
+        lblReloj.setBorder(new EmptyBorder(5, 10, 5, 20)); 
+        
+        Timer timer = new Timer(1000, e -> {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy  |  HH:mm:ss");
+            lblReloj.setText("📅 " + sdf.format(new java.util.Date()));
+        });
+        timer.start();
+
+        add(lblReloj, BorderLayout.NORTH);
+        add(pestañas, BorderLayout.CENTER);
     }
 
     private void crearPestañaRegistro() {
@@ -90,7 +111,12 @@ public class VentanaProducto extends JFrame {
         panelInventario.add(panelBusqueda, BorderLayout.NORTH);
 
         String[] columnas = {"CÓDIGO", "NOMBRE", "COSTO", "VENTA", "STOCK"};
-        modeloTabla = new DefaultTableModel(columnas, 0);
+        modeloTabla = new DefaultTableModel(columnas, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Esto bloquea la edición manual en la celda
+            }
+        };
         tabla = new JTable(modeloTabla);
         
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(modeloTabla);
@@ -177,7 +203,6 @@ public class VentanaProducto extends JFrame {
         
         JTextField txtFiltroCombo = (JTextField) cbBusquedaManual.getEditor().getEditorComponent();
 
-        // Borra el texto de ayuda al hacer click
         txtFiltroCombo.addFocusListener(new java.awt.event.FocusAdapter() {
             public void focusGained(java.awt.event.FocusEvent e) {
                 if (txtFiltroCombo.getText().equals("Seleccione un producto...")) {
@@ -186,12 +211,8 @@ public class VentanaProducto extends JFrame {
             }
         });
 
-        // ==========================================
-        // 1. NUEVA LÓGICA DEL BUSCADOR MANUAL (TECLADO + ENTER)
-        // ==========================================
         txtFiltroCombo.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyReleased(java.awt.event.KeyEvent e) {
-                // A. Si presiona ENTER (Cargar producto al carrito rápido)
                 if(e.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
                     String seleccion = txtFiltroCombo.getText();
                     if(seleccion.contains(" - ")) {
@@ -199,27 +220,26 @@ public class VentanaProducto extends JFrame {
                         Producto p = ProductoDAO.buscarPorCodigo(codigo);
                         if (p != null && p.getStock() > 0) {
                             agregarAlCarrito(p);
-                            txtFiltroCombo.setText(""); // Limpia para el siguiente cliente
-                            cbBusquedaManual.hidePopup(); // Cierra la lista desplegable
+                            txtFiltroCombo.setText(""); 
+                            cbBusquedaManual.hidePopup(); 
                         } else {
                             JOptionPane.showMessageDialog(null, "Sin stock disponible");
                         }
                     }
-                    return; // Cortamos acá para que no siga filtrando
+                    return; 
                 }
 
-                // B. Si usa las flechitas arriba/abajo (Navegación normal)
                 if(e.getKeyCode() == java.awt.event.KeyEvent.VK_UP || 
                    e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
                     return; 
                 }
 
-                // C. Si está escribiendo letras (Filtramos la lista)
                 SwingUtilities.invokeLater(() -> {
                     String texto = txtFiltroCombo.getText();
                     cbBusquedaManual.removeAllItems();
-                    if (texto.isEmpty()) cbBusquedaManual.addItem("Seleccione un producto...");
-                    
+                    if (texto.isEmpty()) {
+                        cbBusquedaManual.addItem("Seleccione un producto...");
+                    }
                     for(Producto prod : ProductoDAO.obtenerTodos()) {
                         String item = prod.getCodigoBarras() + " - " + prod.getNombre();
                         if(item.toLowerCase().contains(texto.toLowerCase())) {
@@ -241,7 +261,12 @@ public class VentanaProducto extends JFrame {
         
         // --- ZONA CENTRO (TABLA Y BOTONES) ---
         String[] cols = {"CÓDIGO", "PRODUCTO", "PRECIO", "CANT.", "SUBTOTAL"};
-        modeloVenta = new DefaultTableModel(cols, 0);
+        modeloVenta = new DefaultTableModel(cols, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; 
+            }
+        };
         tablaVenta = new JTable(modeloVenta);
 
         JPanel panelControlesCarrito = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -266,7 +291,8 @@ public class VentanaProducto extends JFrame {
         JPanel panelAbajo = new JPanel(new GridLayout(2, 3, 15, 10)); 
         panelAbajo.setBorder(new TitledBorder("Detalles de Pago y Cobro"));
 
-        JComboBox<String> cbMetodoPago = new JComboBox<>(new String[]{"Efectivo", "Transferencia", "Tarjeta Débito", "Tarjeta Crédito"});
+        // AQUI USAMOS LA VARIABLE GLOBAL cbMetodoPago
+        cbMetodoPago = new JComboBox<>(new String[]{"Efectivo", "Transferencia", "Tarjeta Débito", "Tarjeta Crédito"});
         txtPagaCon = new JTextField();
         lblVuelto = new JLabel("Vuelto: $0.00");
         lblVuelto.setFont(new Font("SansSerif", Font.BOLD, 16));
@@ -307,11 +333,7 @@ public class VentanaProducto extends JFrame {
             }
         });
 
-        // ==========================================
-        // 2. NUEVA LÓGICA DEL BUSCADOR MANUAL (CLICK DEL MOUSE)
-        // ==========================================
         cbBusquedaManual.addActionListener(e -> {
-            // Solo lo activamos si el usuario hizo clic real en la lista
             if (e.getActionCommand().equals("comboBoxChanged") && !cbBusquedaManual.isPopupVisible()) {
                 if (cbBusquedaManual.getSelectedItem() != null) {
                     String seleccion = cbBusquedaManual.getSelectedItem().toString();
@@ -320,7 +342,7 @@ public class VentanaProducto extends JFrame {
                         Producto p = ProductoDAO.buscarPorCodigo(codigo);
                         if (p != null && p.getStock() > 0) {
                             agregarAlCarrito(p);
-                            txtFiltroCombo.setText(""); // Dejamos limpio
+                            txtFiltroCombo.setText(""); 
                         } else {
                             JOptionPane.showMessageDialog(this, "Sin stock disponible");
                         }
@@ -338,18 +360,15 @@ public class VentanaProducto extends JFrame {
         btnFinalizar.addActionListener(e -> {
             if(totalVenta == 0) return; 
             finalizarVenta(); 
-            txtPagaCon.setText("");
-            lblVuelto.setText("Vuelto: $0.00");
-            cbMetodoPago.setSelectedIndex(0);
         });
 
-        // ARMADO FINAL DE LA PESTAÑA VENTAS 
         panelVentas.add(panelArriba, BorderLayout.NORTH);
         panelVentas.add(panelCentro, BorderLayout.CENTER); 
         panelVentas.add(panelSur, BorderLayout.SOUTH);
 
         pestañas.addTab("🛒 Caja y Ventas", panelVentas);
     }
+
     private void agregarAlCarrito(Producto p) {
         boolean productoYaExiste = false;
         for (int i = 0; i < modeloVenta.getRowCount(); i++) {
@@ -375,17 +394,35 @@ public class VentanaProducto extends JFrame {
         calcularVuelto(); 
     }
 
+    // ==========================================
+    // PASO 3A: FINALIZAR VENTA ACTUALIZADO
+    // ==========================================
     private void finalizarVenta() {
+        StringBuilder resumenProductos = new StringBuilder();
+
         for (int i = 0; i < modeloVenta.getRowCount(); i++) {
             String cod = modeloVenta.getValueAt(i, 0).toString();
+            String nombre = modeloVenta.getValueAt(i, 1).toString();
             int cant = (int) modeloVenta.getValueAt(i, 3);
+            
             ProductoDAO.reducirStock(cod, cant);
+            resumenProductos.append(cant).append("x ").append(nombre).append(" | ");
         }
-        JOptionPane.showMessageDialog(this, "Venta realizada con éxito");
+        
+        String metodo = cbMetodoPago.getSelectedItem().toString();
+        com.tienda.db.VentaDAO.registrarVenta(resumenProductos.toString(), totalVenta, metodo);
+
+        JOptionPane.showMessageDialog(this, "Venta realizada y guardada en el historial con éxito");
+        
         modeloVenta.setRowCount(0);
         totalVenta = 0;
         lblTotal.setText("TOTAL: $0.00");
+        txtPagaCon.setText("");
+        lblVuelto.setText("Vuelto: $0.00");
+        cbMetodoPago.setSelectedIndex(0);
+        
         actualizarTabla(); 
+        actualizarHistorial(); 
     }
 
     private void ejecutarGuardado() {
@@ -475,25 +512,24 @@ public class VentanaProducto extends JFrame {
     }
 
     private void ajustarCantidadCarrito(int cambio) {
-        int[] filas = tablaVenta.getSelectedRows(); // <-- AHORA OBTIENE TODAS LAS SELECCIONADAS
+        int[] filas = tablaVenta.getSelectedRows(); 
         if (filas.length == 0) {
             JOptionPane.showMessageDialog(this, "Por favor, seleccione al menos un producto del carrito.");
             return;
         }
 
-        // IMPORTANTE: Recorremos de ATRÁS hacia ADELANTE para que al borrar filas no se corran los índices
         for (int i = filas.length - 1; i >= 0; i--) {
             int fila = filas[i];
             int cantActual = (int) modeloVenta.getValueAt(fila, 3);
             double precioUnidad = (double) modeloVenta.getValueAt(fila, 2);
             String codigo = modeloVenta.getValueAt(fila, 0).toString();
 
-            if (cambio == 0) { // Eliminar todo el producto de la fila
+            if (cambio == 0) { 
                 totalVenta -= (cantActual * precioUnidad);
                 modeloVenta.removeRow(fila);
             } else {
                 int nuevaCant = cantActual + cambio;
-                if (nuevaCant <= 0) { // Si llega a cero al restar, se borra de la lista
+                if (nuevaCant <= 0) { 
                     totalVenta -= (cantActual * precioUnidad);
                     modeloVenta.removeRow(fila);
                 } else {
@@ -501,7 +537,7 @@ public class VentanaProducto extends JFrame {
                         Producto p = ProductoDAO.buscarPorCodigo(codigo);
                         if (nuevaCant > p.getStock()) {
                             JOptionPane.showMessageDialog(this, "No hay más stock para: " + p.getNombre());
-                            continue; // Salta al siguiente producto seleccionado sin causar error
+                            continue; 
                         }
                     }
                     modeloVenta.setValueAt(nuevaCant, fila, 3);
@@ -512,6 +548,46 @@ public class VentanaProducto extends JFrame {
         }
 
         lblTotal.setText("TOTAL: $" + String.format("%.2f", totalVenta));
-        calcularVuelto(); // Sincronizamos el vuelto
+        calcularVuelto(); 
+    }
+
+    // ==========================================
+    // PASO 3B: MÉTODOS DE LA NUEVA PESTAÑA HISTORIAL
+    // ==========================================
+    private void crearPestañaHistorial() {
+        JPanel panelHistorial = new JPanel(new BorderLayout(10, 10));
+        panelHistorial.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        String[] columnas = {"Nº TICKET", "FECHA Y HORA", "DETALLE DE PRODUCTOS", "TOTAL", "MÉTODO PAGO"};
+        modeloHistorial = new DefaultTableModel(columnas, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; 
+            }
+        };
+        JTable tablaHistorial = new JTable(modeloHistorial);
+        
+        // Damos más espacio a la columna del detalle porque será texto largo
+        tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
+
+        actualizarHistorial();
+
+        JButton btnRefrescar = new JButton("Actualizar Historial");
+        btnRefrescar.addActionListener(e -> actualizarHistorial());
+
+        panelHistorial.add(new JScrollPane(tablaHistorial), BorderLayout.CENTER);
+        panelHistorial.add(btnRefrescar, BorderLayout.SOUTH);
+
+        pestañas.addTab("📋 Historial de Ventas", panelHistorial);
+    }
+
+    private void actualizarHistorial() {
+        if (modeloHistorial != null) {
+            modeloHistorial.setRowCount(0);
+            List<String[]> historial = com.tienda.db.VentaDAO.obtenerHistorial();
+            for (String[] fila : historial) {
+                modeloHistorial.addRow(fila);
+            }
+        }
     }
 }
