@@ -2,12 +2,13 @@ package com.tienda.vista;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.*;
 import com.tienda.Modelo.Producto; 
 import com.tienda.db.ProductoDAO;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -18,11 +19,13 @@ public class VentanaProducto extends JFrame {
     
     private JTabbedPane pestañas;
     
-    private JTextField txtCodigoBarras, txtNombre, txtCosto, txtStock;
+    // AHORA SON TEXTFIELDS PUROS, ADIÓS JCOMBOBOX BUGUEADOS
+    private JTextField txtCodigoBarras, txtNombre, txtCosto, txtStock, txtTipo, txtMarca;
     private JComboBox<String> comboMargen;
     
     private JTable tabla;
     private DefaultTableModel modeloTabla;
+    private TableRowSorter<DefaultTableModel> sorterInventario;
     
     private DefaultTableModel modeloVenta;
     private JTable tablaVenta; 
@@ -32,12 +35,19 @@ public class VentanaProducto extends JFrame {
     private JLabel lblVuelto;
     
     private JComboBox<String> cbMetodoPago; 
+    private JTextField txtBusquedaManual; 
     private DefaultTableModel modeloHistorial;
     
     private String rolActual; 
+    
+    // Memoria RAM
+    private List<Producto> cacheProductos = new ArrayList<>();
+    private List<String> cacheTipos = new ArrayList<>();
+    private List<String> cacheMarcas = new ArrayList<>();
 
     public VentanaProducto(String rol) {
         this.rolActual = rol;
+        recargarCaches(); 
 
         try {
             UIManager.setLookAndFeel(new FlatLightLaf());
@@ -53,7 +63,7 @@ public class VentanaProducto extends JFrame {
         pestañas = new JTabbedPane();
 
         if (rol.equals("ADMIN")) {
-            crearPestañaDashboard(); // ¡NUEVO DASHBOARD! (Primero en la lista)
+            crearPestañaDashboard(); 
             crearPestañaRegistro();
             crearPestañaInventario();
             crearPestañaVentas();
@@ -103,6 +113,12 @@ public class VentanaProducto extends JFrame {
         
         SwingUtilities.updateComponentTreeUI(this);
     }
+    
+    private void recargarCaches() {
+        cacheProductos = ProductoDAO.obtenerTodos();
+        cacheTipos = ProductoDAO.obtenerTipos();
+        cacheMarcas = ProductoDAO.obtenerMarcas();
+    }
 
     private void aplicarTema(boolean oscuro, JToggleButton btn) {
         try {
@@ -115,14 +131,9 @@ public class VentanaProducto extends JFrame {
             }
             FlatLaf.updateUI(); 
             SwingUtilities.updateComponentTreeUI(this);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al cambiar el tema");
-        }
+        } catch (Exception ex) {}
     }
 
-    // ==========================================
-    // NUEVA PESTAÑA: DASHBOARD DE ESTADÍSTICAS
-    // ==========================================
     private void crearPestañaDashboard() {
         JPanel panelDashboard = new JPanel(new BorderLayout(20, 20));
         panelDashboard.setBorder(new EmptyBorder(30, 30, 30, 30));
@@ -131,18 +142,33 @@ public class VentanaProducto extends JFrame {
         lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 28));
         panelDashboard.add(lblTitulo, BorderLayout.NORTH);
 
-        // Contenedor de las "Tarjetas"
         JPanel panelTarjetas = new JPanel(new GridLayout(1, 3, 20, 0));
 
-        // Obtenemos los datos frescos de la BD
         double totalVendido = com.tienda.db.VentaDAO.obtenerTotalVentasHistorico();
         int totalProductos = ProductoDAO.obtenerTotalProductosRegistrados();
-        int productosBajoStock = ProductoDAO.obtenerProductosBajoStock(5); // Avisa si hay 5 o menos
+        int productosBajoStock = ProductoDAO.obtenerProductosBajoStock(5); 
 
-        // Creamos las 3 tarjetas
-        JPanel tarjetaVentas = crearTarjeta("Ingresos Totales", "$" + String.format("%.2f", totalVendido), new Color(46, 204, 113)); // Verde
-        JPanel tarjetaProductos = crearTarjeta("Productos Catálogo", String.valueOf(totalProductos), new Color(52, 152, 219)); // Azul
-        JPanel tarjetaAlertas = crearTarjeta("Alertas Bajo Stock", String.valueOf(productosBajoStock), new Color(231, 76, 60)); // Rojo
+        JPanel tarjetaVentas = crearTarjeta("Ingresos Totales", "$" + String.format("%.2f", totalVendido), new Color(46, 204, 113)); 
+        JPanel tarjetaProductos = crearTarjeta("Productos Catálogo", String.valueOf(totalProductos), new Color(52, 152, 219)); 
+        JPanel tarjetaAlertas = crearTarjeta("Alertas Bajo Stock", String.valueOf(productosBajoStock), new Color(231, 76, 60)); 
+
+        tarjetaAlertas.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        tarjetaAlertas.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                pestañas.setSelectedIndex(2); 
+                if (sorterInventario != null) {
+                    sorterInventario.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
+                        @Override
+                        public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                            try {
+                                int stockActual = Integer.parseInt(entry.getModel().getValueAt(entry.getIdentifier(), 6).toString()); 
+                                return stockActual <= 5;
+                            } catch(Exception ex) { return false; }
+                        }
+                    });
+                }
+            }
+        });
 
         panelTarjetas.add(tarjetaVentas);
         panelTarjetas.add(tarjetaProductos);
@@ -150,11 +176,9 @@ public class VentanaProducto extends JFrame {
 
         panelDashboard.add(panelTarjetas, BorderLayout.CENTER);
         
-        // Botón para actualizar el dashboard a mano si lo desean
         JButton btnRefrescar = new JButton("↻ Actualizar Estadísticas");
         btnRefrescar.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnRefrescar.addActionListener(e -> {
-            // Un pequeño truco para refrescar la pestaña
             pestañas.remove(panelDashboard);
             crearPestañaDashboard();
             pestañas.setSelectedIndex(0);
@@ -166,80 +190,197 @@ public class VentanaProducto extends JFrame {
         pestañas.insertTab("📊 Dashboard", null, panelDashboard, "Resumen General", 0);
     }
 
-    // Método de apoyo para dibujar las tarjetas del Dashboard bonitas
     private JPanel crearTarjeta(String titulo, String valor, Color colorBorde) {
         JPanel tarjeta = new JPanel(new GridLayout(2, 1));
         tarjeta.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(colorBorde, 4, true),
             new EmptyBorder(20, 20, 20, 20)
         ));
-        
         JLabel lblTitulo = new JLabel(titulo, SwingConstants.CENTER);
         lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 16));
         lblTitulo.setForeground(Color.GRAY);
-        
         JLabel lblValor = new JLabel(valor, SwingConstants.CENTER);
         lblValor.setFont(new Font("SansSerif", Font.BOLD, 36));
-        
-        tarjeta.add(lblTitulo);
-        tarjeta.add(lblValor);
+        tarjeta.add(lblTitulo); tarjeta.add(lblValor);
         return tarjeta;
     }
 
+    // ==============================================================
+    // EL NUEVO BUSCADOR "NIVEL DIOS" (TEXTFIELD + BOTON DESPLEGABLE)
+    // ==============================================================
+    private JPanel crearBuscadorConDesplegable(JTextField textField, java.util.function.Supplier<List<String>> proveedor, boolean isVentas) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(textField, BorderLayout.CENTER);
+        
+        // El botón de la flechita para ver todo
+        JButton btnDrop = new JButton("▼");
+        btnDrop.setPreferredSize(new Dimension(35, 0));
+        btnDrop.setFocusable(false);
+        btnDrop.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        panel.add(btnDrop, BorderLayout.EAST);
+        
+        JPopupMenu popup = new JPopupMenu();
+        popup.setFocusable(false);
+        
+        // Motor de renderizado del menú flotante
+        java.util.function.Consumer<String> mostrarPopup = (filtro) -> {
+            popup.removeAll();
+            String f = filtro.toLowerCase().trim();
+            int count = 0;
+            for (String op : proveedor.get()) {
+                if (f.isEmpty() || op.toLowerCase().contains(f)) {
+                    JMenuItem item = new JMenuItem(op);
+                    item.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                    
+                    // ¡AQUÍ ESTÁ LA MAGIA DEL CLIC! Usamos mousePressed para que nunca falle
+                    item.addMouseListener(new MouseAdapter() {
+                        public void mousePressed(MouseEvent e) {
+                            if (isVentas) {
+                                textField.setText("");
+                                popup.setVisible(false);
+                                procesarSeleccionVenta(op); // Agrega al carrito
+                            } else {
+                                textField.setText(op);
+                                popup.setVisible(false);
+                            }
+                            textField.requestFocus();
+                        }
+                    });
+                    popup.add(item);
+                    count++;
+                    if (count >= 15) break; // Límite para que no se salga de la pantalla
+                }
+            }
+            if (count > 0) {
+                popup.show(textField, 0, textField.getHeight());
+                textField.requestFocus();
+            } else {
+                popup.setVisible(false);
+            }
+        };
+
+        // Filtro mientras escribes
+        textField.addKeyListener(new KeyAdapter() {
+            public void keyReleased(KeyEvent e) {
+                int c = e.getKeyCode();
+                if (c == KeyEvent.VK_ESCAPE) { popup.setVisible(false); return; }
+                if (c == KeyEvent.VK_ENTER || c == KeyEvent.VK_UP || c == KeyEvent.VK_DOWN || c == KeyEvent.VK_LEFT || c == KeyEvent.VK_RIGHT) return;
+                mostrarPopup.accept(textField.getText());
+            }
+        });
+
+        // Botón flecha muestra todo
+        btnDrop.addActionListener(e -> {
+            textField.requestFocus();
+            mostrarPopup.accept(""); 
+        });
+
+        // Autoselección al hacer clic
+        textField.addFocusListener(new FocusAdapter() {
+            public void focusGained(FocusEvent e) {
+                SwingUtilities.invokeLater(() -> textField.selectAll());
+            }
+        });
+        
+        // Si aprieta Enter en Ventas, agarra el primer resultado válido
+        if (isVentas) {
+            textField.addActionListener(e -> {
+                String text = textField.getText().trim().toLowerCase();
+                if (text.isEmpty()) return;
+                for (String op : proveedor.get()) {
+                    if (op.toLowerCase().contains(text)) {
+                        procesarSeleccionVenta(op);
+                        textField.setText("");
+                        popup.setVisible(false);
+                        return;
+                    }
+                }
+            });
+        }
+        
+        return panel;
+    }
+
+    // Adaptador de la lista de ventas
+    private List<String> obtenerListaProductosFormateada() {
+        List<String> lista = new ArrayList<>();
+        for (Producto p : cacheProductos) {
+            lista.add(p.getCodigoBarras() + " - " + p.getTipo() + " " + p.getMarca() + " " + p.getNombre());
+        }
+        return lista;
+    }
+
+    private void procesarSeleccionVenta(String seleccion) {
+        if(seleccion.contains(" - ")) {
+            String codigo = seleccion.split(" - ")[0];
+            Producto p = ProductoDAO.buscarPorCodigo(codigo);
+            if (p != null && p.getStock() > 0) agregarAlCarrito(p);
+            else JOptionPane.showMessageDialog(this, "Sin stock disponible");
+        }
+    }
+
+    // ==============================================================
+    // PESTAÑA REGISTRO
+    // ==============================================================
     private void crearPestañaRegistro() {
         JPanel panelRegistro = new JPanel(new BorderLayout(10, 10));
-        panelRegistro.setBorder(new EmptyBorder(30, 80, 30, 80));
+        panelRegistro.setBorder(new EmptyBorder(15, 80, 15, 80)); 
 
-        JPanel form = new JPanel(new GridLayout(5, 2, 15, 25));
+        JPanel form = new JPanel(new GridLayout(7, 2, 10, 15));
         form.setBorder(BorderFactory.createTitledBorder("Datos del Producto"));
 
         Font fuenteFormulario = new Font("SansSerif", Font.PLAIN, 15);
 
         txtCodigoBarras = new JTextField(); txtCodigoBarras.setFont(fuenteFormulario);
         txtNombre = new JTextField(); txtNombre.setFont(fuenteFormulario);
+        
+        // IMPLEMENTAMOS LOS NUEVOS BUSCADORES INTELIGENTES
+        txtTipo = new JTextField(); txtTipo.setFont(fuenteFormulario);
+        JPanel panelTipo = crearBuscadorConDesplegable(txtTipo, () -> cacheTipos, false);
+        
+        txtMarca = new JTextField(); txtMarca.setFont(fuenteFormulario);
+        JPanel panelMarca = crearBuscadorConDesplegable(txtMarca, () -> cacheMarcas, false);
+        
         txtCosto = new JTextField(); txtCosto.setFont(fuenteFormulario);
         txtStock = new JTextField(); txtStock.setFont(fuenteFormulario);
         comboMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
         comboMargen.setFont(fuenteFormulario);
 
-        JLabel lbl1 = new JLabel("Código de Barras:"); lbl1.setFont(fuenteFormulario);
-        JLabel lbl2 = new JLabel("Nombre:"); lbl2.setFont(fuenteFormulario);
-        JLabel lbl3 = new JLabel("Precio de Costo ($):"); lbl3.setFont(fuenteFormulario);
-        JLabel lbl4 = new JLabel("Cantidad en Stock:"); lbl4.setFont(fuenteFormulario);
-        JLabel lbl5 = new JLabel("Margen de Ganancia (%):"); lbl5.setFont(fuenteFormulario);
+        form.add(new JLabel("Código de Barras:") {{ setFont(fuenteFormulario); }}); form.add(txtCodigoBarras);
+        form.add(new JLabel("Nombre:") {{ setFont(fuenteFormulario); }}); form.add(txtNombre);
+        form.add(new JLabel("Tipo (Ej: Cargador, Cable):") {{ setFont(fuenteFormulario); }}); form.add(panelTipo);
+        form.add(new JLabel("Marca (Ej: Samsung, Generico):") {{ setFont(fuenteFormulario); }}); form.add(panelMarca);
+        form.add(new JLabel("Precio de Costo ($):") {{ setFont(fuenteFormulario); }}); form.add(txtCosto);
+        form.add(new JLabel("Cantidad en Stock:") {{ setFont(fuenteFormulario); }}); form.add(txtStock);
+        form.add(new JLabel("Margen Ganancia (%):") {{ setFont(fuenteFormulario); }}); form.add(comboMargen);
 
-        form.add(lbl1); form.add(txtCodigoBarras);
-        form.add(lbl2); form.add(txtNombre);
-        form.add(lbl3); form.add(txtCosto);
-        form.add(lbl4); form.add(txtStock);
-        form.add(lbl5); form.add(comboMargen);
-
-        // 1. PRIMERO CREAMOS EL BOTÓN
         JButton btnGuardar = new JButton("GUARDAR PRODUCTO");
         btnGuardar.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnGuardar.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnGuardar.addActionListener(e -> ejecutarGuardado());
 
-        // 2. AHORA SÍ, AGREGAMOS LA MAGIA UX DEL ENTER
+        // Navegación con Enter
         txtCodigoBarras.addActionListener(e -> txtNombre.requestFocus());
-        txtNombre.addActionListener(e -> txtCosto.requestFocus());
+        txtNombre.addActionListener(e -> txtTipo.requestFocus());
+        txtTipo.addActionListener(e -> txtMarca.requestFocus());
+        txtMarca.addActionListener(e -> txtCosto.requestFocus());
         txtCosto.addActionListener(e -> txtStock.requestFocus());
         txtStock.addActionListener(e -> comboMargen.requestFocus());
         
-        comboMargen.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyPressed(java.awt.event.KeyEvent e) {
-                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
-                    btnGuardar.doClick(); // Ahora Java ya sabe qué es btnGuardar
-                }
+        comboMargen.addKeyListener(new KeyAdapter() {
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) btnGuardar.doClick(); 
             }
         });
 
         panelRegistro.add(form, BorderLayout.CENTER);
         panelRegistro.add(btnGuardar, BorderLayout.SOUTH);
-
         pestañas.addTab(" Registrar Nuevo", panelRegistro);
     }
 
+    // ==============================================================
+    // PESTAÑA INVENTARIO Y EDICIÓN
+    // ==============================================================
     private void aplicarEstiloTabla(JTable t) {
         t.setRowHeight(30); 
         t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13)); 
@@ -254,32 +395,55 @@ public class VentanaProducto extends JFrame {
         JTextField txtBuscador = new JTextField();
         panelBusqueda.add(txtBuscador, BorderLayout.CENTER);
         
+        JButton btnActualizarInv = new JButton("↻ Actualizar");
+        btnActualizarInv.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnActualizarInv.addActionListener(e -> {
+            txtBuscador.setText(""); 
+            if (sorterInventario != null) sorterInventario.setRowFilter(null); 
+            actualizarTabla(); 
+        });
+        panelBusqueda.add(btnActualizarInv, BorderLayout.EAST);
+        
         panelInventario.add(panelBusqueda, BorderLayout.NORTH);
 
-        String[] columnas = {"CÓDIGO", "NOMBRE", "COSTO", "VENTA", "STOCK"};
+        String[] columnas = {"CÓDIGO", "NOMBRE", "TIPO", "MARCA", "COSTO", "VENTA", "STOCK"};
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; 
-            }
+            public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public Class<?> getColumnClass(int columnIndex) { return String.class; }
         };
         tabla = new JTable(modeloTabla);
         aplicarEstiloTabla(tabla); 
         
-        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(modeloTabla);
-        tabla.setRowSorter(sorter);
+        tabla.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                try {
+                    int stock = Integer.parseInt(table.getValueAt(row, 6).toString()); 
+                    if (stock <= 5 && !isSelected) {
+                        c.setBackground(new Color(255, 204, 204)); 
+                        c.setForeground(new Color(153, 0, 0)); 
+                    } else if (!isSelected) {
+                        c.setBackground(table.getBackground());
+                        c.setForeground(table.getForeground());
+                    }
+                } catch (Exception e) {}
+                return c;
+            }
+        });
+
+        sorterInventario = new TableRowSorter<>(modeloTabla);
+        tabla.setRowSorter(sorterInventario);
 
         actualizarTabla();
 
-        txtBuscador.addKeyListener(new java.awt.event.KeyAdapter() {
-            @Override
-            public void keyReleased(java.awt.event.KeyEvent e) {
+        txtBuscador.addKeyListener(new KeyAdapter() {
+            public void keyReleased(KeyEvent e) {
                 String texto = txtBuscador.getText();
-                if (texto.trim().length() == 0) {
-                    sorter.setRowFilter(null); 
-                } else {
-                    sorter.setRowFilter(RowFilter.regexFilter("(?i)" + texto));
-                }
+                if (texto.trim().length() == 0) sorterInventario.setRowFilter(null); 
+                else sorterInventario.setRowFilter(RowFilter.regexFilter("(?i)" + texto));
             }
         });
 
@@ -287,7 +451,6 @@ public class VentanaProducto extends JFrame {
             JPopupMenu popupMenu = new JPopupMenu();
             JMenuItem itemEditar = new JMenuItem("Editar Producto");
             JMenuItem itemEliminar = new JMenuItem("Eliminar Producto(s)");
-
             popupMenu.add(itemEditar);
             popupMenu.add(itemEliminar);
             tabla.setComponentPopupMenu(popupMenu);
@@ -295,45 +458,79 @@ public class VentanaProducto extends JFrame {
             itemEliminar.addActionListener(e -> {
                 int[] filasVisuales = tabla.getSelectedRows(); 
                 if (filasVisuales.length > 0) {
-                    int respuesta = JOptionPane.showConfirmDialog(this, "¿Seguro que quieres borrar " + filasVisuales.length + " producto(s)?", "Confirmar", JOptionPane.YES_NO_OPTION);
-                    if (respuesta == JOptionPane.YES_OPTION) {
+                    if (JOptionPane.showConfirmDialog(this, "¿Seguro de borrar?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                         for (int i = 0; i < filasVisuales.length; i++) {
-                            int filaReal = tabla.convertRowIndexToModel(filasVisuales[i]);
-                            String codigo = modeloTabla.getValueAt(filaReal, 0).toString();
+                            String codigo = modeloTabla.getValueAt(tabla.convertRowIndexToModel(filasVisuales[i]), 0).toString();
                             ProductoDAO.eliminarProducto(codigo);
                         }
+                        recargarCaches(); 
                         actualizarTabla(); 
                         JOptionPane.showMessageDialog(this, "Productos eliminados.");
                     }
                 }
             });
 
-            itemEditar.addActionListener(e -> {
-                int filaVisual = tabla.getSelectedRow();
-                if (filaVisual != -1) {
-                    int filaReal = tabla.convertRowIndexToModel(filaVisual);
-                    abrirDialogoEdicion(filaReal);
-                }
-            });
-
-            tabla.addMouseListener(new java.awt.event.MouseAdapter() {
-                @Override
-                public void mouseClicked(java.awt.event.MouseEvent e) {
-                    if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
-                        int filaVisual = tabla.getSelectedRow();
-                        if (filaVisual != -1) {
-                            int filaReal = tabla.convertRowIndexToModel(filaVisual);
-                            abrirDialogoEdicion(filaReal); 
-                        }
-                    }
+            itemEditar.addActionListener(e -> abrirEdicionDesdeTabla());
+            tabla.addMouseListener(new MouseAdapter() {
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) abrirEdicionDesdeTabla();
                 }
             });
         }
-
         panelInventario.add(new JScrollPane(tabla), BorderLayout.CENTER);
         pestañas.addTab(" Ver Inventario", panelInventario);
     }
-    
+
+    private void abrirEdicionDesdeTabla() {
+        int filaVisual = tabla.getSelectedRow();
+        if (filaVisual != -1) abrirDialogoEdicion(tabla.convertRowIndexToModel(filaVisual));
+    }
+
+    private void abrirDialogoEdicion(int fila) {
+        String codigo = tabla.getValueAt(fila, 0).toString();
+        String nAct = tabla.getValueAt(fila, 1).toString(), tAct = tabla.getValueAt(fila, 2).toString(), mAct = tabla.getValueAt(fila, 3).toString();
+        String cAct = tabla.getValueAt(fila, 4).toString(), sAct = tabla.getValueAt(fila, 6).toString(); 
+
+        JDialog dialogo = new JDialog(this, "Editar Producto", true);
+        dialogo.setLayout(new GridLayout(7, 2, 10, 10)); dialogo.setSize(400, 350); dialogo.setLocationRelativeTo(this);
+
+        JTextField txtNom = new JTextField(nAct);
+        
+        JTextField txtTip = new JTextField(tAct.equals("-") ? "" : tAct); 
+        JPanel panelTip = crearBuscadorConDesplegable(txtTip, () -> cacheTipos, false);
+
+        JTextField txtMar = new JTextField(mAct.equals("-") ? "" : mAct); 
+        JPanel panelMar = crearBuscadorConDesplegable(txtMar, () -> cacheMarcas, false);
+
+        JTextField txtCos = new JTextField(cAct); JTextField txtStk = new JTextField(sAct);
+        JComboBox<String> cbMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
+
+        dialogo.add(new JLabel(" Nombre:")); dialogo.add(txtNom); 
+        dialogo.add(new JLabel(" Tipo:")); dialogo.add(panelTip);
+        dialogo.add(new JLabel(" Marca:")); dialogo.add(panelMar); 
+        dialogo.add(new JLabel(" Costo:")); dialogo.add(txtCos);
+        dialogo.add(new JLabel(" Stock:")); dialogo.add(txtStk); 
+        dialogo.add(new JLabel(" Nuevo Margen %:")); dialogo.add(cbMargen);
+
+        JButton btnConfirmar = new JButton("Guardar Cambios");
+        btnConfirmar.addActionListener(ev -> {
+            try {
+                String nt = txtTip.getText().trim();
+                String nm = txtMar.getText().trim();
+                Producto pEditado = new Producto(codigo, txtNom.getText(), nt.isEmpty() ? "-" : nt, nm.isEmpty() ? "-" : nm, 
+                    Double.parseDouble(txtCos.getText()), Integer.parseInt(txtStk.getText()), Double.parseDouble(cbMargen.getSelectedItem().toString()));
+                
+                ProductoDAO.actualizarProducto(pEditado);
+                recargarCaches(); actualizarTabla(); 
+                dialogo.dispose(); JOptionPane.showMessageDialog(this, "¡Producto actualizado!");
+            } catch (Exception ex) { JOptionPane.showMessageDialog(dialogo, "Datos inválidos"); }
+        });
+        dialogo.add(new JLabel("")); dialogo.add(btnConfirmar); dialogo.setVisible(true);
+    }
+
+    // ==============================================================
+    // PESTAÑA VENTAS Y CAJA
+    // ==============================================================
     private void crearPestañaVentas() {
         JPanel panelVentas = new JPanel(new BorderLayout(10, 10));
         panelVentas.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -342,75 +539,21 @@ public class VentanaProducto extends JFrame {
         
         JTextField txtEscaneo = new JTextField(15);
         txtEscaneo.setBorder(BorderFactory.createTitledBorder("Escanear Código"));
-        
-        JComboBox<String> cbBusquedaManual = new JComboBox<>();
-        cbBusquedaManual.setBorder(BorderFactory.createTitledBorder("Buscar Manualmente"));
-        cbBusquedaManual.addItem("Seleccione un producto...");
-        cbBusquedaManual.setEditable(true);
-        
-        JTextField txtFiltroCombo = (JTextField) cbBusquedaManual.getEditor().getEditorComponent();
-
-        txtFiltroCombo.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent e) {
-                if (txtFiltroCombo.getText().equals("Seleccione un producto...")) {
-                    txtFiltroCombo.setText("");
-                }
-            }
+        txtEscaneo.addFocusListener(new FocusAdapter() {
+            public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(() -> txtEscaneo.selectAll()); }
         });
-
-        txtFiltroCombo.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyReleased(java.awt.event.KeyEvent e) {
-                if(e.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
-                    String seleccion = txtFiltroCombo.getText();
-                    if(seleccion.contains(" - ")) {
-                        String codigo = seleccion.split(" - ")[0];
-                        Producto p = ProductoDAO.buscarPorCodigo(codigo);
-                        if (p != null && p.getStock() > 0) {
-                            agregarAlCarrito(p);
-                            txtFiltroCombo.setText(""); 
-                            cbBusquedaManual.hidePopup(); 
-                        } else {
-                            JOptionPane.showMessageDialog(null, "Sin stock disponible");
-                        }
-                    }
-                    return; 
-                }
-
-                if(e.getKeyCode() == java.awt.event.KeyEvent.VK_UP || e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
-                    return; 
-                }
-
-                SwingUtilities.invokeLater(() -> {
-                    String texto = txtFiltroCombo.getText();
-                    cbBusquedaManual.removeAllItems();
-                    if (texto.isEmpty()) {
-                        cbBusquedaManual.addItem("Seleccione un producto...");
-                    }
-                    for(Producto prod : ProductoDAO.obtenerTodos()) {
-                        String item = prod.getCodigoBarras() + " - " + prod.getNombre();
-                        if(item.toLowerCase().contains(texto.toLowerCase())) {
-                            cbBusquedaManual.addItem(item);
-                        }
-                    }
-                    txtFiltroCombo.setText(texto);
-                    if(cbBusquedaManual.getItemCount() > 0) cbBusquedaManual.showPopup(); 
-                });
-            }
-        });
-
-        for(Producto p : ProductoDAO.obtenerTodos()) {
-            cbBusquedaManual.addItem(p.getCodigoBarras() + " - " + p.getNombre());
-        }
+        
+        // BUSCADOR INTELIGENTE EN CAJA
+        txtBusquedaManual = new JTextField(25);
+        JPanel panelBusqueda = crearBuscadorConDesplegable(txtBusquedaManual, () -> obtenerListaProductosFormateada(), true);
+        panelBusqueda.setBorder(BorderFactory.createTitledBorder("Buscar Manualmente (Tipea o abre flecha)"));
 
         panelArriba.add(txtEscaneo);
-        panelArriba.add(cbBusquedaManual);
+        panelArriba.add(panelBusqueda);
         
         String[] cols = {"CÓDIGO", "PRODUCTO", "PRECIO", "CANT.", "SUBTOTAL"};
         modeloVenta = new DefaultTableModel(cols, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; 
-            }
+            public boolean isCellEditable(int row, int column) { return false; }
         };
         tablaVenta = new JTable(modeloVenta);
         aplicarEstiloTabla(tablaVenta); 
@@ -419,15 +562,11 @@ public class VentanaProducto extends JFrame {
         JButton btnSumar = new JButton("+ Sumar 1");
         JButton btnRestar = new JButton("- Restar 1");
         JButton btnQuitar = new JButton("Quitar Todo (X)");
-
         btnSumar.addActionListener(e -> ajustarCantidadCarrito(1));
         btnRestar.addActionListener(e -> ajustarCantidadCarrito(-1));
         btnQuitar.addActionListener(e -> ajustarCantidadCarrito(0));
-
         panelControlesCarrito.add(new JLabel("Seleccione en la tabla y ajuste: "));
-        panelControlesCarrito.add(btnSumar);
-        panelControlesCarrito.add(btnRestar);
-        panelControlesCarrito.add(btnQuitar);
+        panelControlesCarrito.add(btnSumar); panelControlesCarrito.add(btnRestar); panelControlesCarrito.add(btnQuitar);
 
         JPanel panelCentro = new JPanel(new BorderLayout());
         panelCentro.add(new JScrollPane(tablaVenta), BorderLayout.CENTER);
@@ -438,89 +577,37 @@ public class VentanaProducto extends JFrame {
 
         cbMetodoPago = new JComboBox<>(new String[]{"Efectivo", "Transferencia", "Tarjeta Débito", "Tarjeta Crédito"});
         txtPagaCon = new JTextField();
-
-        // Magia UX: Seleccionar todo el texto al hacer clic
-        txtEscaneo.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent e) {
-                txtEscaneo.selectAll();
-            }
-        });
-
-        txtPagaCon.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent e) {
-                txtPagaCon.selectAll();
-            }
+        txtPagaCon.addFocusListener(new FocusAdapter() {
+            public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(() -> txtPagaCon.selectAll()); }
         });
 
         lblVuelto = new JLabel("Vuelto: $0.00");
         lblVuelto.setFont(new Font("SansSerif", Font.BOLD, 18)); 
 
-        panelAbajo.add(new JLabel("Método de Pago:"));
-        panelAbajo.add(new JLabel("El cliente abona con ($):"));
-        panelAbajo.add(new JLabel("")); 
-        panelAbajo.add(cbMetodoPago);
-        panelAbajo.add(txtPagaCon);
-        panelAbajo.add(lblVuelto);
+        panelAbajo.add(new JLabel("Método de Pago:")); panelAbajo.add(new JLabel("El cliente abona con ($):")); panelAbajo.add(new JLabel("")); 
+        panelAbajo.add(cbMetodoPago); panelAbajo.add(txtPagaCon); panelAbajo.add(lblVuelto);
         
         JPanel panelSur = new JPanel(new BorderLayout());
         panelSur.add(panelAbajo, BorderLayout.CENTER);
         
         JPanel panelCobrar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 10));
-        lblTotal = new JLabel("TOTAL: $0.00");
-        lblTotal.setFont(new Font("SansSerif", Font.BOLD, 22));
-        
-        JButton btnFinalizar = new JButton("CONFIRMAR VENTA");
-        btnFinalizar.setFont(new Font("SansSerif", Font.BOLD, 14));
-        btnFinalizar.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        panelCobrar.add(lblTotal);
-        panelCobrar.add(btnFinalizar);
+        lblTotal = new JLabel("TOTAL: $0.00"); lblTotal.setFont(new Font("SansSerif", Font.BOLD, 22));
+        JButton btnFinalizar = new JButton("CONFIRMAR VENTA"); btnFinalizar.setFont(new Font("SansSerif", Font.BOLD, 14));
+        panelCobrar.add(lblTotal); panelCobrar.add(btnFinalizar);
         panelSur.add(panelCobrar, BorderLayout.SOUTH);
 
         txtEscaneo.addActionListener(e -> {
-            String codigo = txtEscaneo.getText();
-            Producto p = ProductoDAO.buscarPorCodigo(codigo);
-            if (p != null && p.getStock() > 0) {
-                agregarAlCarrito(p);
-                txtEscaneo.setText(""); 
-            } else {
-                JOptionPane.showMessageDialog(this, "Producto no encontrado o sin stock");
-            }
+            Producto p = ProductoDAO.buscarPorCodigo(txtEscaneo.getText());
+            if (p != null && p.getStock() > 0) { agregarAlCarrito(p); txtEscaneo.setText(""); } 
+            else JOptionPane.showMessageDialog(this, "Producto no encontrado o sin stock");
         });
 
-        cbBusquedaManual.addActionListener(e -> {
-            if (e.getActionCommand().equals("comboBoxChanged") && !cbBusquedaManual.isPopupVisible()) {
-                if (cbBusquedaManual.getSelectedItem() != null) {
-                    String seleccion = cbBusquedaManual.getSelectedItem().toString();
-                    if(seleccion.contains(" - ")) {
-                        String codigo = seleccion.split(" - ")[0]; 
-                        Producto p = ProductoDAO.buscarPorCodigo(codigo);
-                        if (p != null && p.getStock() > 0) {
-                            agregarAlCarrito(p);
-                            txtFiltroCombo.setText(""); 
-                        } else {
-                            JOptionPane.showMessageDialog(this, "Sin stock disponible");
-                        }
-                    }
-                }
-            }
-        });
-
-        txtPagaCon.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyReleased(java.awt.event.KeyEvent e) {
-                calcularVuelto();
-            }
-        });
-
-        btnFinalizar.addActionListener(e -> {
-            if(totalVenta == 0) return; 
-            finalizarVenta(); 
-        });
+        txtPagaCon.addKeyListener(new KeyAdapter() { public void keyReleased(KeyEvent e) { calcularVuelto(); } });
+        btnFinalizar.addActionListener(e -> { if(totalVenta > 0) finalizarVenta(); });
 
         panelVentas.add(panelArriba, BorderLayout.NORTH);
         panelVentas.add(panelCentro, BorderLayout.CENTER); 
         panelVentas.add(panelSur, BorderLayout.SOUTH);
-
         pestañas.addTab("🛒 Caja y Ventas", panelVentas);
     }
 
@@ -528,240 +615,143 @@ public class VentanaProducto extends JFrame {
         boolean productoYaExiste = false;
         for (int i = 0; i < modeloVenta.getRowCount(); i++) {
             if (modeloVenta.getValueAt(i, 0).equals(p.getCodigoBarras())) {
-                int cantidadActual = (int) modeloVenta.getValueAt(i, 3);
-                if (cantidadActual >= p.getStock()) {
-                    JOptionPane.showMessageDialog(this, "No hay más stock disponible para: " + p.getNombre());
-                    return;
-                }
-                int nuevaCantidad = cantidadActual + 1;
-                double nuevoSubtotal = nuevaCantidad * p.getPrecioVenta();
-                modeloVenta.setValueAt(nuevaCantidad, i, 3); 
-                modeloVenta.setValueAt(nuevoSubtotal, i, 4); 
-                productoYaExiste = true;
-                break;
+                int cantAct = (int) modeloVenta.getValueAt(i, 3);
+                if (cantAct >= p.getStock()) { JOptionPane.showMessageDialog(this, "No hay más stock disponible"); return; }
+                modeloVenta.setValueAt(cantAct + 1, i, 3); 
+                modeloVenta.setValueAt((cantAct + 1) * p.getPrecioVenta(), i, 4); 
+                productoYaExiste = true; break;
             }
         }
-        if (!productoYaExiste) {
-            modeloVenta.addRow(new Object[]{p.getCodigoBarras(), p.getNombre(), p.getPrecioVenta(), 1, p.getPrecioVenta()});
-        }
+        if (!productoYaExiste) modeloVenta.addRow(new Object[]{p.getCodigoBarras(), p.getNombre(), p.getPrecioVenta(), 1, p.getPrecioVenta()});
         totalVenta += p.getPrecioVenta();
         lblTotal.setText("TOTAL: $" + String.format("%.2f", totalVenta));
         calcularVuelto(); 
     }
 
     private void finalizarVenta() {
-        StringBuilder resumenProductos = new StringBuilder();
-
+        StringBuilder resumen = new StringBuilder();
         for (int i = 0; i < modeloVenta.getRowCount(); i++) {
             String cod = modeloVenta.getValueAt(i, 0).toString();
-            String nombre = modeloVenta.getValueAt(i, 1).toString();
             int cant = (int) modeloVenta.getValueAt(i, 3);
-            
             ProductoDAO.reducirStock(cod, cant);
-            resumenProductos.append(cant).append("x ").append(nombre).append(" | ");
+            resumen.append(cant).append("x ").append(modeloVenta.getValueAt(i, 1)).append(" | ");
         }
+        com.tienda.db.VentaDAO.registrarVenta(resumen.toString(), totalVenta, cbMetodoPago.getSelectedItem().toString());
+        JOptionPane.showMessageDialog(this, "Venta realizada con éxito");
         
-        String metodo = cbMetodoPago.getSelectedItem().toString();
-        com.tienda.db.VentaDAO.registrarVenta(resumenProductos.toString(), totalVenta, metodo);
-
-        JOptionPane.showMessageDialog(this, "Venta realizada y guardada en el historial con éxito");
+        modeloVenta.setRowCount(0); totalVenta = 0;
+        lblTotal.setText("TOTAL: $0.00"); txtPagaCon.setText(""); lblVuelto.setText("Vuelto: $0.00");
         
-        modeloVenta.setRowCount(0);
-        totalVenta = 0;
-        lblTotal.setText("TOTAL: $0.00");
-        txtPagaCon.setText("");
-        lblVuelto.setText("Vuelto: $0.00");
-        cbMetodoPago.setSelectedIndex(0);
-        
+        recargarCaches(); 
         actualizarTabla(); 
-        if ("ADMIN".equals(rolActual)) {
-            actualizarHistorial(); 
-        }
+        if ("ADMIN".equals(rolActual)) actualizarHistorial(); 
     }
 
     private void ejecutarGuardado() {
         try {
-            // Validaciones rápidas
-            if (txtCodigoBarras.getText().trim().isEmpty() || txtNombre.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "El código y el nombre son obligatorios.", "Aviso", JOptionPane.WARNING_MESSAGE);
-                return;
+            String codigo = txtCodigoBarras.getText().trim();
+            String nombre = txtNombre.getText().trim();
+
+            if (codigo.isEmpty() || nombre.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Código y nombre obligatorios.", "Aviso", JOptionPane.WARNING_MESSAGE); return;
+            }
+            if (ProductoDAO.buscarPorCodigo(codigo) != null) {
+                JOptionPane.showMessageDialog(this, "Ya existe código: " + codigo, "Error", JOptionPane.ERROR_MESSAGE); return;
             }
             
-            double costo = Double.parseDouble(txtCosto.getText());
-            double margen = Double.parseDouble(comboMargen.getSelectedItem().toString());
-            Producto p = new Producto(txtCodigoBarras.getText(), txtNombre.getText(), costo, Integer.parseInt(txtStock.getText()), margen);
+            String t = txtTipo.getText().trim();
+            String m = txtMarca.getText().trim();
+            
+            Producto p = new Producto(codigo, nombre, t.isEmpty() ? "-" : t, m.isEmpty() ? "-" : m, 
+                Double.parseDouble(txtCosto.getText()), Integer.parseInt(txtStock.getText()), Double.parseDouble(comboMargen.getSelectedItem().toString()));
+            
             ProductoDAO.registrarProducto(p);
+            JOptionPane.showMessageDialog(this, "Producto guardado");
             
-            JOptionPane.showMessageDialog(this, "Producto guardado exitosamente");
+            recargarCaches(); 
             actualizarTabla(); 
-            limpiarCampos();
             
-            // Llevamos el foco de vuelta al inicio para registrar otro rápido
+            txtCodigoBarras.setText(""); txtNombre.setText(""); txtCosto.setText(""); txtStock.setText("");
+            txtTipo.setText(""); txtMarca.setText("");
             txtCodigoBarras.requestFocus();
             
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error: Verifique que los campos numéricos sean correctos.");
-        }
+        } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Datos numéricos incorrectos."); }
     }
 
     public void actualizarTabla() {
         modeloTabla.setRowCount(0);
-        List<Producto> lista = ProductoDAO.obtenerTodos();
-        for (Producto p : lista) {
-            modeloTabla.addRow(new Object[]{p.getCodigoBarras(), p.getNombre(), p.getPrecioCosto(), p.getPrecioVenta(), p.getStock()});
+        for (Producto p : cacheProductos) { 
+            modeloTabla.addRow(new Object[]{ p.getCodigoBarras(), p.getNombre(), p.getTipo(), p.getMarca(), p.getPrecioCosto(), p.getPrecioVenta(), p.getStock()});
         }
     }
 
-    private void limpiarCampos() {
-        txtCodigoBarras.setText(""); txtNombre.setText(""); txtCosto.setText(""); txtStock.setText("");
-        txtCodigoBarras.requestFocus();
-    }
-
-    private void abrirDialogoEdicion(int fila) {
-        String codigo = tabla.getValueAt(fila, 0).toString();
-        String nombreActual = tabla.getValueAt(fila, 1).toString();
-        String costoActual = tabla.getValueAt(fila, 2).toString();
-        String stockActual = tabla.getValueAt(fila, 4).toString();
-
-        JDialog dialogo = new JDialog(this, "Editar Producto", true);
-        dialogo.setLayout(new GridLayout(5, 2, 10, 10));
-        dialogo.setSize(350, 280);
-        dialogo.setLocationRelativeTo(this);
-
-        JTextField txtNom = new JTextField(nombreActual);
-        JTextField txtCos = new JTextField(costoActual);
-        JTextField txtStk = new JTextField(stockActual);
-        JComboBox<String> cbMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
-
-        dialogo.add(new JLabel(" Nombre:")); dialogo.add(txtNom);
-        dialogo.add(new JLabel(" Costo:")); dialogo.add(txtCos);
-        dialogo.add(new JLabel(" Stock:")); dialogo.add(txtStk);
-        dialogo.add(new JLabel(" Nuevo Margen %:")); dialogo.add(cbMargen);
-
-        JButton btnConfirmar = new JButton("Guardar Cambios");
-        btnConfirmar.addActionListener(ev -> {
-            try {
-                double nuevoCosto = Double.parseDouble(txtCos.getText());
-                int nuevoStock = Integer.parseInt(txtStk.getText());
-                double nuevoMargen = Double.parseDouble(cbMargen.getSelectedItem().toString());
-
-                Producto pEditado = new Producto(codigo, txtNom.getText(), nuevoCosto, nuevoStock, nuevoMargen);
-                ProductoDAO.actualizarProducto(pEditado);
-                actualizarTabla();
-                dialogo.dispose(); 
-                JOptionPane.showMessageDialog(this, "¡Producto actualizado!");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(dialogo, "Datos inválidos");
-            }
-        });
-
-        dialogo.add(new JLabel("")); 
-        dialogo.add(btnConfirmar);
-        dialogo.setVisible(true);
-    }
-
+    // ==============================================================
+    // PESTAÑA HISTORIAL
+    // ==============================================================
     private void crearPestañaHistorial() {
         JPanel panelHistorial = new JPanel(new BorderLayout(10, 10));
         panelHistorial.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        String[] columnas = {"Nº TICKET", "FECHA Y HORA", "DETALLE DE PRODUCTOS", "TOTAL", "MÉTODO PAGO"};
-        modeloHistorial = new DefaultTableModel(columnas, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; 
-            }
-        };
+        JPanel panelArribaHistorial = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnActualizarHistorial = new JButton("↻ Actualizar Historial");
+        btnActualizarHistorial.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnActualizarHistorial.addActionListener(e -> actualizarHistorial());
+        panelArribaHistorial.add(btnActualizarHistorial);
+        panelHistorial.add(panelArribaHistorial, BorderLayout.NORTH);
+
+        String[] cols = {"Nº TICKET", "FECHA Y HORA", "DETALLE DE PRODUCTOS", "TOTAL", "MÉTODO PAGO"};
+        modeloHistorial = new DefaultTableModel(cols, 0) { public boolean isCellEditable(int r, int c) { return false; } };
         JTable tablaHistorial = new JTable(modeloHistorial);
-        aplicarEstiloTabla(tablaHistorial); 
-        
-        tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
+        aplicarEstiloTabla(tablaHistorial); tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
 
         actualizarHistorial();
-
-        JButton btnRefrescar = new JButton("Actualizar Historial");
-        btnRefrescar.addActionListener(e -> actualizarHistorial());
-
         panelHistorial.add(new JScrollPane(tablaHistorial), BorderLayout.CENTER);
-        panelHistorial.add(btnRefrescar, BorderLayout.SOUTH);
-
         pestañas.addTab("📋 Historial de Ventas", panelHistorial);
     }
 
     private void actualizarHistorial() {
         if (modeloHistorial != null) {
             modeloHistorial.setRowCount(0);
-            List<String[]> historial = com.tienda.db.VentaDAO.obtenerHistorial();
-            for (String[] fila : historial) {
-                modeloHistorial.addRow(fila);
-            }
-        }
-    }
-
-    // ==========================================
-    // MÉTODOS RECUPERADOS DEL CARRITO Y VUELTO
-    // ==========================================
-    private void calcularVuelto() {
-        try {
-            if (txtPagaCon.getText().trim().isEmpty()) {
-                lblVuelto.setText("Vuelto: $0.00");
-                lblVuelto.setForeground(UIManager.getColor("Label.foreground")); // Color normal
-                return;
-            }
-            double abona = Double.parseDouble(txtPagaCon.getText());
-            double vuelto = abona - totalVenta;
-            
-            if (vuelto < 0) {
-                // Si falta plata, se pone ROJO
-                lblVuelto.setText("FALTAN: $" + String.format("%.2f", Math.abs(vuelto)));
-                lblVuelto.setForeground(new Color(231, 76, 60)); 
-            } else {
-                // Si está todo pagado, se pone VERDE
-                lblVuelto.setText("Vuelto: $" + String.format("%.2f", vuelto));
-                lblVuelto.setForeground(new Color(46, 204, 113)); 
-            }
-        } catch (NumberFormatException ex) {
-            lblVuelto.setText("Vuelto: $0.00");
-            lblVuelto.setForeground(UIManager.getColor("Label.foreground"));
+            for (String[] fila : com.tienda.db.VentaDAO.obtenerHistorial()) modeloHistorial.addRow(fila);
         }
     }
 
     private void ajustarCantidadCarrito(int cambio) {
         int[] filas = tablaVenta.getSelectedRows(); 
-        if (filas.length == 0) {
-            JOptionPane.showMessageDialog(this, "Por favor, seleccione al menos un producto del carrito.");
-            return;
-        }
-
+        if (filas.length == 0) { JOptionPane.showMessageDialog(this, "Seleccione un producto."); return; }
         for (int i = filas.length - 1; i >= 0; i--) {
-            int fila = filas[i];
-            int cantActual = (int) modeloVenta.getValueAt(fila, 3);
-            double precioUnidad = (double) modeloVenta.getValueAt(fila, 2);
-            String codigo = modeloVenta.getValueAt(fila, 0).toString();
-
-            if (cambio == 0) { 
-                totalVenta -= (cantActual * precioUnidad);
-                modeloVenta.removeRow(fila);
-            } else {
-                int nuevaCant = cantActual + cambio;
-                if (nuevaCant <= 0) { 
-                    totalVenta -= (cantActual * precioUnidad);
-                    modeloVenta.removeRow(fila);
-                } else {
-                    if (cambio > 0) {
-                        Producto p = ProductoDAO.buscarPorCodigo(codigo);
-                        if (nuevaCant > p.getStock()) {
-                            JOptionPane.showMessageDialog(this, "No hay más stock para: " + p.getNombre());
-                            continue; 
-                        }
-                    }
-                    modeloVenta.setValueAt(nuevaCant, fila, 3);
-                    modeloVenta.setValueAt(nuevaCant * precioUnidad, fila, 4);
-                    totalVenta += (cambio * precioUnidad);
-                }
+            int fila = filas[i]; int cantAct = (int) modeloVenta.getValueAt(fila, 3); double precio = (double) modeloVenta.getValueAt(fila, 2);
+            if (cambio == 0 || cantAct + cambio <= 0) { totalVenta -= (cantAct * precio); modeloVenta.removeRow(fila); } 
+            else {
+                if (cambio > 0 && cantAct + cambio > ProductoDAO.buscarPorCodigo(modeloVenta.getValueAt(fila, 0).toString()).getStock()) continue; 
+                modeloVenta.setValueAt(cantAct + cambio, fila, 3); modeloVenta.setValueAt((cantAct + cambio) * precio, fila, 4); totalVenta += (cambio * precio);
             }
         }
+        lblTotal.setText("TOTAL: $" + String.format("%.2f", totalVenta)); calcularVuelto(); 
+    }
 
-        lblTotal.setText("TOTAL: $" + String.format("%.2f", totalVenta));
-        calcularVuelto(); 
+    // CÁLCULO DE VUELTO 
+   
+    private void calcularVuelto() {
+        try {
+            if (txtPagaCon.getText().trim().isEmpty()) { 
+                lblVuelto.setText("Vuelto: $0.00"); 
+                lblVuelto.setForeground(UIManager.getColor("Label.foreground")); 
+                return; 
+            }
+            double abona = Double.parseDouble(txtPagaCon.getText());
+            double vuelto = abona - totalVenta;
+            
+            if (vuelto < 0) { 
+                lblVuelto.setText("FALTAN: $" + String.format("%.2f", Math.abs(vuelto))); 
+                lblVuelto.setForeground(new Color(231, 76, 60)); 
+            } else { 
+                lblVuelto.setText("Vuelto: $" + String.format("%.2f", vuelto)); 
+                lblVuelto.setForeground(new Color(46, 204, 113)); 
+            }
+        } catch (NumberFormatException ex) { 
+            lblVuelto.setText("Vuelto: $0.00"); 
+            lblVuelto.setForeground(UIManager.getColor("Label.foreground")); 
+        }
     }
 }

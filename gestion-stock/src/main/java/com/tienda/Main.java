@@ -6,7 +6,7 @@ import javax.swing.SwingUtilities;
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            // Ahora la aplicación arranca pidiendo la contraseña
+            //la aplicación arranca pidiendo la contraseña
             VentanaLogin login = new VentanaLogin();
             login.setVisible(true);
         });

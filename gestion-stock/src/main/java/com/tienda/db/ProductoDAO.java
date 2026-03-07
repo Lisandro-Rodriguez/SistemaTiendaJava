@@ -1,163 +1,170 @@
 package com.tienda.db;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 import com.tienda.Modelo.Producto;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ProductoDAO {
 
-    /**
-     * Guarda un producto en la base de datos.
-     */
-    public static void registrarProducto(Producto producto) {
-        // La instrucción SQL para insertar los datos en las 5 columnas
-        String sql = "INSERT INTO productos(codigo_barras, nombre, precio_costo, precio_venta, stock) VALUES(?,?,?,?,?)";
-
+    public static void crearTablaProductos() {
+        // Creamos la tabla con TODOS los campos desde cero (incluyendo tipo y marca)
+        String sql = "CREATE TABLE IF NOT EXISTS productos ("
+                + "codigo_barras TEXT PRIMARY KEY,"
+                + "nombre TEXT NOT NULL,"
+                + "tipo TEXT DEFAULT '-',"
+                + "marca TEXT DEFAULT '-',"
+                + "precio_costo REAL NOT NULL,"
+                + "stock INTEGER NOT NULL,"
+                + "margen_ganancia REAL NOT NULL,"
+                + "precio_venta REAL NOT NULL"
+                + ");";
+                
         try (Connection conn = ConexionDB.conectar();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            // Reemplazamos los "?" con los datos reales del producto
-            pstmt.setString(1, producto.getCodigoBarras());
-            pstmt.setString(2, producto.getNombre());
-            pstmt.setDouble(3, producto.getPrecioCosto());
-            pstmt.setDouble(4, producto.getPrecioVenta()); // Aquí ya va el precio calculado con tu margen personalizado
-            pstmt.setInt(5, producto.getStock());
-
-            // Ejecutamos la orden en la base de datos
-            pstmt.executeUpdate();
-            System.out.println("¡Éxito! Producto '" + producto.getNombre() + "' guardado en la base de datos.");
-
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
         } catch (SQLException e) {
-            System.out.println("Error al guardar el producto: " + e.getMessage());
+            System.out.println("Error creando tabla productos: " + e.getMessage());
         }
     }
 
-    //Para crear sección de BD
-
-    public static java.util.List<Producto> obtenerTodos() {
-    java.util.List<Producto> lista = new java.util.ArrayList<>();
-    String sql = "SELECT * FROM productos";
-
-    try (Connection conn = ConexionDB.conectar();
-         java.sql.Statement stmt = conn.createStatement();
-         java.sql.ResultSet rs = stmt.executeQuery(sql)) {
-
-        while (rs.next()) {
-            // Creamos el producto con los datos de la base de datos
-            Producto p = new Producto(
-                rs.getString("codigo_barras"),
-                rs.getString("nombre"),
-                rs.getDouble("precio_costo"),
-                rs.getInt("stock"),
-                0 // El margen no lo necesitamos aquí porque ya tenemos el precio_venta calculado
-            );
-            
-            // IMPORTANTE: Sobrescribimos el precio de venta con el valor real guardado en la BD
-            p.setPrecioVenta(rs.getDouble("precio_venta")); 
-            lista.add(p);
-        }
-    } catch (java.sql.SQLException e) {
-        System.out.println("Error al obtener productos: " + e.getMessage());
-    }
-    return lista;
-    }
-
-    //para actualizar, borrar datos de la tabla
-
-    // Método para BORRAR un producto por su código
-public static void eliminarProducto(String codigo) {
-    String sql = "DELETE FROM productos WHERE codigo_barras = ?";
-
-    try (Connection conn = ConexionDB.conectar();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
-        
-        pstmt.setString(1, codigo);
-        pstmt.executeUpdate();
-        System.out.println("Producto eliminado de la BD.");
-
-    } catch (SQLException e) {
-        System.out.println("Error al eliminar: " + e.getMessage());
-    }
-}
-
-    // Método para ACTUALIZAR datos (Nombre, Costo, Stock)
-public static void actualizarProducto(Producto p) {
-    String sql = "UPDATE productos SET nombre = ?, precio_costo = ?, precio_venta = ?, stock = ? WHERE codigo_barras = ?";
-
-    try (Connection conn = ConexionDB.conectar();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
-        
-        pstmt.setString(1, p.getNombre());
-        pstmt.setDouble(2, p.getPrecioCosto());
-        pstmt.setDouble(3, p.getPrecioVenta());
-        pstmt.setInt(4, p.getStock());
-        pstmt.setString(5, p.getCodigoBarras());
-
-        pstmt.executeUpdate();
-        System.out.println("Producto actualizado en la BD.");
-
-    } catch (SQLException e) {
-        System.out.println("Error al actualizar: " + e.getMessage());
-    }
-}
-
-        // Busca un solo producto por código
-    public static Producto buscarPorCodigo(String codigo) {
-     String sql = "SELECT * FROM productos WHERE codigo_barras = ?";
+    public static void registrarProducto(Producto p) {
+        crearTablaProductos();
+        String sql = "INSERT INTO productos(codigo_barras, nombre, tipo, marca, precio_costo, stock, margen_ganancia, precio_venta) VALUES(?,?,?,?,?,?,?,?)";
         try (Connection conn = ConexionDB.conectar();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-             pstmt.setString(1, codigo);
-             ResultSet rs = pstmt.executeQuery();
-             if (rs.next()) {
-                Producto p = new Producto(rs.getString("codigo_barras"), rs.getString("nombre"), 
-                rs.getDouble("precio_costo"), rs.getInt("stock"), 0);
-                p.setPrecioVenta(rs.getDouble("precio_venta"));
-                return p;
-            }
-         } catch (SQLException e) { System.out.println(e.getMessage()); }
-    return null;
-}
-
-        // Resta stock tras una venta
-    public static void reducirStock(String codigo, int cantidad) {
-        String sql = "UPDATE productos SET stock = stock - ? WHERE codigo_barras = ?";
-        try (Connection conn = ConexionDB.conectar();
-            PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, cantidad);
-            pstmt.setString(2, codigo);
+            pstmt.setString(1, p.getCodigoBarras());
+            pstmt.setString(2, p.getNombre());
+            pstmt.setString(3, p.getTipo());
+            pstmt.setString(4, p.getMarca());
+            pstmt.setDouble(5, p.getPrecioCosto());
+            pstmt.setInt(6, p.getStock());
+            pstmt.setDouble(7, p.getMargenGanancia());
+            pstmt.setDouble(8, p.getPrecioVenta());
             pstmt.executeUpdate();
-        } catch (SQLException e) { System.out.println(e.getMessage()); }
+        } catch (SQLException e) {
+            System.out.println("Error al registrar: " + e.getMessage());
+        }
     }
 
-    // 6. Contar cuántos productos distintos hay registrados
-    public static int obtenerTotalProductosRegistrados() {
-        String sql = "SELECT COUNT(*) as total FROM productos";
+    public static List<Producto> obtenerTodos() {
+        crearTablaProductos();
+        List<Producto> lista = new ArrayList<>();
+        String sql = "SELECT * FROM productos";
         try (Connection conn = ConexionDB.conectar();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) return rs.getInt("total");
+            while (rs.next()) {
+                Producto p = new Producto(
+                        rs.getString("codigo_barras"),
+                        rs.getString("nombre"),
+                        rs.getString("tipo"),
+                        rs.getString("marca"),
+                        rs.getDouble("precio_costo"),
+                        rs.getInt("stock"),
+                        rs.getDouble("margen_ganancia")
+                );
+                lista.add(p);
+            }
         } catch (SQLException e) {
-            System.out.println("Error contando productos: " + e.getMessage());
+            System.out.println("Error al obtener productos: " + e.getMessage());
         }
+        return lista;
+    }
+
+    public static Producto buscarPorCodigo(String codigo) {
+        String sql = "SELECT * FROM productos WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, codigo);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return new Producto(
+                            rs.getString("codigo_barras"),
+                            rs.getString("nombre"),
+                            rs.getString("tipo"),
+                            rs.getString("marca"),
+                            rs.getDouble("precio_costo"),
+                            rs.getInt("stock"),
+                            rs.getDouble("margen_ganancia")
+                    );
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Error al buscar: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static void reducirStock(String codigo, int cantidadVendida) {
+        String sql = "UPDATE productos SET stock = stock - ? WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, cantidadVendida);
+            pstmt.setString(2, codigo);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {}
+    }
+
+    public static void eliminarProducto(String codigo) {
+        String sql = "DELETE FROM productos WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, codigo);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {}
+    }
+
+    public static void actualizarProducto(Producto p) {
+        String sql = "UPDATE productos SET nombre = ?, tipo = ?, marca = ?, precio_costo = ?, stock = ?, margen_ganancia = ?, precio_venta = ? WHERE codigo_barras = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, p.getNombre());
+            pstmt.setString(2, p.getTipo());
+            pstmt.setString(3, p.getMarca());
+            pstmt.setDouble(4, p.getPrecioCosto());
+            pstmt.setInt(5, p.getStock());
+            pstmt.setDouble(6, p.getMargenGanancia());
+            pstmt.setDouble(7, p.getPrecioVenta());
+            pstmt.setString(8, p.getCodigoBarras());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {}
+    }
+
+    public static int obtenerTotalProductosRegistrados() {
+        String sql = "SELECT COUNT(*) as total FROM productos";
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) return rs.getInt("total");
+        } catch (SQLException e) { }
         return 0;
     }
 
-    // Contar cuántos productos tienen el stock por debajo de un límite (ej. 5)
     public static int obtenerProductosBajoStock(int limite) {
         String sql = "SELECT COUNT(*) as total FROM productos WHERE stock <= ?";
-        try (Connection conn = ConexionDB.conectar();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = ConexionDB.conectar(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, limite);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) return rs.getInt("total");
             }
-        } catch (SQLException e) {
-            System.out.println("Error contando bajo stock: " + e.getMessage());
-        }
+        } catch (SQLException e) { }
         return 0;
+    }
+
+    public static List<String> obtenerTipos() {
+        List<String> lista = new ArrayList<>();
+        String sql = "SELECT DISTINCT tipo FROM productos WHERE tipo IS NOT NULL AND tipo != '-' AND tipo != ''";
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) lista.add(rs.getString("tipo"));
+        } catch (SQLException e) {}
+        return lista;
+    }
+
+    public static List<String> obtenerMarcas() {
+        List<String> lista = new ArrayList<>();
+        String sql = "SELECT DISTINCT marca FROM productos WHERE marca IS NOT NULL AND marca != '-' AND marca != ''";
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) lista.add(rs.getString("marca"));
+        } catch (SQLException e) {}
+        return lista;
     }
 }
