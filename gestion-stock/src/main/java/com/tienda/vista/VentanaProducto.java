@@ -6,9 +6,12 @@ import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
-import com.tienda.Modelo.Producto; // Asegúrate de que la "m" de modelo sea minúscula según tu carpeta
+import com.tienda.Modelo.Producto; 
 import com.tienda.db.ProductoDAO;
 import java.util.List;
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatLaf; 
 
 public class VentanaProducto extends JFrame {
     
@@ -31,13 +34,13 @@ public class VentanaProducto extends JFrame {
     private JTextField txtPagaCon;
     private JLabel lblVuelto;
     
-    // NUEVAS GLOBALES PARA EL HISTORIAL Y PAGOS (PASO 3A y 3B)
+    // Pestaña Historial y Pagos
     private JComboBox<String> cbMetodoPago; 
     private DefaultTableModel modeloHistorial;
 
     public VentanaProducto() {
         setTitle("Sistema de Gestión de Stock y Ventas");
-        setSize(900, 650); 
+        setSize(950, 700); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -46,16 +49,21 @@ public class VentanaProducto extends JFrame {
         crearPestañaRegistro();
         crearPestañaInventario();
         crearPestañaVentas();
-        
-        // PASO 3C: LLAMAMOS A LA NUEVA PESTAÑA
         crearPestañaHistorial(); 
 
-        // --- RELOJ EN TIEMPO REAL ---
+        // --- BARRA SUPERIOR (RELOJ Y MODO OSCURO) ---
+        JPanel panelTop = new JPanel(new BorderLayout());
+        panelTop.setBorder(new EmptyBorder(5, 15, 5, 15));
+
+        JToggleButton btnTema = new JToggleButton("🌙 Modo Oscuro");
+        btnTema.setFocusPainted(false);
+        btnTema.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnTema.addActionListener(e -> aplicarTema(btnTema.isSelected(), btnTema));
+
         JLabel lblReloj = new JLabel();
         lblReloj.setFont(new Font("SansSerif", Font.BOLD, 14));
         lblReloj.setForeground(new Color(52, 73, 94)); 
         lblReloj.setHorizontalAlignment(SwingConstants.RIGHT);
-        lblReloj.setBorder(new EmptyBorder(5, 10, 5, 20)); 
         
         Timer timer = new Timer(1000, e -> {
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy  |  HH:mm:ss");
@@ -63,8 +71,38 @@ public class VentanaProducto extends JFrame {
         });
         timer.start();
 
-        add(lblReloj, BorderLayout.NORTH);
+        panelTop.add(btnTema, BorderLayout.WEST);
+        panelTop.add(lblReloj, BorderLayout.EAST);
+
+        add(panelTop, BorderLayout.NORTH);
         add(pestañas, BorderLayout.CENTER);
+    }
+
+    // ==========================================
+    // LÓGICA DEL MODO OSCURO / CLARO
+    // ==========================================
+    // ==========================================
+    // LÓGICA DEL MODO OSCURO (CORREGIDA)
+    // ==========================================
+    private void aplicarTema(boolean oscuro, JToggleButton btn) {
+        try {
+            if (oscuro) {
+                UIManager.setLookAndFeel(new FlatDarkLaf());
+                btn.setText("☀️ Modo Claro");
+            } else {
+                UIManager.setLookAndFeel(new FlatLightLaf());
+                btn.setText("🌙 Modo Oscuro");
+            }
+            
+            // 1. Comando especial de FlatLaf para limpiar caché de colores
+            FlatLaf.updateUI(); 
+            
+            // 2. Le decimos a la ventana que se vuelva a dibujar entera
+            SwingUtilities.updateComponentTreeUI(this);
+            
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al cambiar el tema");
+        }
     }
 
     private void crearPestañaRegistro() {
@@ -74,22 +112,33 @@ public class VentanaProducto extends JFrame {
         JPanel form = new JPanel(new GridLayout(5, 2, 10, 20));
         form.setBorder(new TitledBorder("Datos del Producto"));
 
-        txtCodigoBarras = new JTextField();
-        txtNombre = new JTextField();
-        txtCosto = new JTextField();
-        txtStock = new JTextField();
-        comboMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
+        // Fuente más grande para el formulario
+        Font fuenteFormulario = new Font("SansSerif", Font.PLAIN, 16);
 
-        form.add(new JLabel("Código de Barras:")); form.add(txtCodigoBarras);
-        form.add(new JLabel("Nombre:")); form.add(txtNombre);
-        form.add(new JLabel("Precio de Costo ($):")); form.add(txtCosto);
-        form.add(new JLabel("Cantidad en Stock:")); form.add(txtStock);
-        form.add(new JLabel("Margen de Ganancia (%):")); form.add(comboMargen);
+        txtCodigoBarras = new JTextField(); txtCodigoBarras.setFont(fuenteFormulario);
+        txtNombre = new JTextField(); txtNombre.setFont(fuenteFormulario);
+        txtCosto = new JTextField(); txtCosto.setFont(fuenteFormulario);
+        txtStock = new JTextField(); txtStock.setFont(fuenteFormulario);
+        comboMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
+        comboMargen.setFont(fuenteFormulario);
+
+        JLabel lbl1 = new JLabel("Código de Barras:"); lbl1.setFont(fuenteFormulario);
+        JLabel lbl2 = new JLabel("Nombre:"); lbl2.setFont(fuenteFormulario);
+        JLabel lbl3 = new JLabel("Precio de Costo ($):"); lbl3.setFont(fuenteFormulario);
+        JLabel lbl4 = new JLabel("Cantidad en Stock:"); lbl4.setFont(fuenteFormulario);
+        JLabel lbl5 = new JLabel("Margen de Ganancia (%):"); lbl5.setFont(fuenteFormulario);
+
+        form.add(lbl1); form.add(txtCodigoBarras);
+        form.add(lbl2); form.add(txtNombre);
+        form.add(lbl3); form.add(txtCosto);
+        form.add(lbl4); form.add(txtStock);
+        form.add(lbl5); form.add(comboMargen);
 
         JButton btnGuardar = new JButton("GUARDAR PRODUCTO");
         btnGuardar.setBackground(new Color(46, 204, 113));
         btnGuardar.setForeground(Color.WHITE);
         btnGuardar.setFont(new Font("SansSerif", Font.BOLD, 14));
+        btnGuardar.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnGuardar.addActionListener(e -> ejecutarGuardado());
 
@@ -97,6 +146,15 @@ public class VentanaProducto extends JFrame {
         panelRegistro.add(btnGuardar, BorderLayout.SOUTH);
 
         pestañas.addTab(" Registrar Nuevo", panelRegistro);
+    }
+
+    private void aplicarEstiloTabla(JTable t) {
+        t.setRowHeight(28); 
+        t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13)); 
+        t.getTableHeader().setBackground(new Color(41, 128, 185)); 
+        t.getTableHeader().setForeground(Color.WHITE); 
+        t.setSelectionBackground(new Color(52, 152, 219));
+        t.setSelectionForeground(Color.WHITE);
     }
 
     private void crearPestañaInventario() {
@@ -114,10 +172,11 @@ public class VentanaProducto extends JFrame {
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Esto bloquea la edición manual en la celda
+                return false; 
             }
         };
         tabla = new JTable(modeloTabla);
+        aplicarEstiloTabla(tabla); // Aplica el nuevo diseño
         
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(modeloTabla);
         tabla.setRowSorter(sorter);
@@ -190,7 +249,6 @@ public class VentanaProducto extends JFrame {
         JPanel panelVentas = new JPanel(new BorderLayout(10, 10));
         panelVentas.setBorder(new EmptyBorder(10, 10, 10, 10));
         
-        // --- ZONA ARRIBA ---
         JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         
         JTextField txtEscaneo = new JTextField(15);
@@ -229,8 +287,7 @@ public class VentanaProducto extends JFrame {
                     return; 
                 }
 
-                if(e.getKeyCode() == java.awt.event.KeyEvent.VK_UP || 
-                   e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
+                if(e.getKeyCode() == java.awt.event.KeyEvent.VK_UP || e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
                     return; 
                 }
 
@@ -259,7 +316,6 @@ public class VentanaProducto extends JFrame {
         panelArriba.add(txtEscaneo);
         panelArriba.add(cbBusquedaManual);
         
-        // --- ZONA CENTRO (TABLA Y BOTONES) ---
         String[] cols = {"CÓDIGO", "PRODUCTO", "PRECIO", "CANT.", "SUBTOTAL"};
         modeloVenta = new DefaultTableModel(cols, 0) {
             @Override
@@ -268,6 +324,7 @@ public class VentanaProducto extends JFrame {
             }
         };
         tablaVenta = new JTable(modeloVenta);
+        aplicarEstiloTabla(tablaVenta); // Aplica el nuevo diseño
 
         JPanel panelControlesCarrito = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton btnSumar = new JButton("+ Sumar 1");
@@ -287,11 +344,9 @@ public class VentanaProducto extends JFrame {
         panelCentro.add(new JScrollPane(tablaVenta), BorderLayout.CENTER);
         panelCentro.add(panelControlesCarrito, BorderLayout.SOUTH);
 
-        // --- ZONA ABAJO ---
         JPanel panelAbajo = new JPanel(new GridLayout(2, 3, 15, 10)); 
         panelAbajo.setBorder(new TitledBorder("Detalles de Pago y Cobro"));
 
-        // AQUI USAMOS LA VARIABLE GLOBAL cbMetodoPago
         cbMetodoPago = new JComboBox<>(new String[]{"Efectivo", "Transferencia", "Tarjeta Débito", "Tarjeta Crédito"});
         txtPagaCon = new JTextField();
         lblVuelto = new JLabel("Vuelto: $0.00");
@@ -316,12 +371,12 @@ public class VentanaProducto extends JFrame {
         btnFinalizar.setBackground(new Color(46, 204, 113));
         btnFinalizar.setForeground(Color.WHITE);
         btnFinalizar.setFont(new Font("SansSerif", Font.BOLD, 14));
+        btnFinalizar.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         panelCobrar.add(lblTotal);
         panelCobrar.add(btnFinalizar);
         panelSur.add(panelCobrar, BorderLayout.SOUTH);
 
-        // --- EVENTOS ---
         txtEscaneo.addActionListener(e -> {
             String codigo = txtEscaneo.getText();
             Producto p = ProductoDAO.buscarPorCodigo(codigo);
@@ -394,9 +449,6 @@ public class VentanaProducto extends JFrame {
         calcularVuelto(); 
     }
 
-    // ==========================================
-    // PASO 3A: FINALIZAR VENTA ACTUALIZADO
-    // ==========================================
     private void finalizarVenta() {
         StringBuilder resumenProductos = new StringBuilder();
 
@@ -551,9 +603,6 @@ public class VentanaProducto extends JFrame {
         calcularVuelto(); 
     }
 
-    // ==========================================
-    // PASO 3B: MÉTODOS DE LA NUEVA PESTAÑA HISTORIAL
-    // ==========================================
     private void crearPestañaHistorial() {
         JPanel panelHistorial = new JPanel(new BorderLayout(10, 10));
         panelHistorial.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -566,8 +615,8 @@ public class VentanaProducto extends JFrame {
             }
         };
         JTable tablaHistorial = new JTable(modeloHistorial);
+        aplicarEstiloTabla(tablaHistorial); // Aplica el nuevo diseño
         
-        // Damos más espacio a la columna del detalle porque será texto largo
         tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
 
         actualizarHistorial();
