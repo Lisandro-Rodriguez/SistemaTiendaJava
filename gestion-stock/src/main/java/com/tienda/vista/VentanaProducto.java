@@ -87,7 +87,44 @@ public class VentanaProducto extends JFrame {
         panelInventario.add(btnRefrescar, BorderLayout.SOUTH);
 
         pestañas.addTab(" Ver Inventario", panelInventario);
+
+        // --- CREAMOS EL MENÚ EMERGENTE (CLICK DERECHO) ---
+        JPopupMenu popupMenu = new JPopupMenu();
+        JMenuItem itemEditar = new JMenuItem("Editar Producto");
+        JMenuItem itemEliminar = new JMenuItem("Eliminar Producto");
+
+         popupMenu.add(itemEditar);
+         popupMenu.add(itemEliminar);
+
+        // Asignamos el menú a la tabla
+        tabla.setComponentPopupMenu(popupMenu);
+
+         // --- LÓGICA PARA ELIMINAR ---
+        itemEliminar.addActionListener(e -> {
+        int fila = tabla.getSelectedRow();
+        if (fila != -1) {
+            String codigo = tabla.getValueAt(fila, 0).toString();
+            String nombre = tabla.getValueAt(fila, 1).toString();
+
+            int respuesta = JOptionPane.showConfirmDialog(this, 
+                "¿Seguro que quieres borrar " + nombre + "?", "Confirmar", JOptionPane.YES_NO_OPTION);
+            
+            if (respuesta == JOptionPane.YES_OPTION) {
+                ProductoDAO.eliminarProducto(codigo);
+                actualizarTabla(); // Refrescamos la pestaña para que desaparezca
+            }
+        }
+        });
+
+        // --- LÓGICA PARA EDITAR ---
+        itemEditar.addActionListener(e -> {
+             int fila = tabla.getSelectedRow();
+                if (fila != -1) {
+                  abrirDialogoEdicion(fila);
+            }
+        });
     }
+    
 
     private void ejecutarGuardado() {
         try {
@@ -122,4 +159,51 @@ public class VentanaProducto extends JFrame {
         txtCodigoBarras.setText(""); txtNombre.setText(""); txtCosto.setText(""); txtStock.setText("");
         txtCodigoBarras.requestFocus();
     }
+
+    private void abrirDialogoEdicion(int fila) {
+    // 1. Obtenemos los datos actuales de la fila tocada
+    String codigo = tabla.getValueAt(fila, 0).toString();
+    String nombreActual = tabla.getValueAt(fila, 1).toString();
+    String costoActual = tabla.getValueAt(fila, 2).toString();
+    String stockActual = tabla.getValueAt(fila, 4).toString();
+
+    // 2. Creamos una ventanita rápida
+    JDialog dialogo = new JDialog(this, "Editar Producto", true);
+    dialogo.setLayout(new GridLayout(5, 2, 10, 10));
+    dialogo.setSize(300, 250);
+    dialogo.setLocationRelativeTo(this);
+
+    JTextField txtNom = new JTextField(nombreActual);
+    JTextField txtCos = new JTextField(costoActual);
+    JTextField txtStk = new JTextField(stockActual);
+    JComboBox<String> cbMargen = new JComboBox<>(new String[]{"10", "20", "30", "40", "50", "100"});
+
+    dialogo.add(new JLabel(" Nombre:")); dialogo.add(txtNom);
+    dialogo.add(new JLabel(" Costo:")); dialogo.add(txtCos);
+    dialogo.add(new JLabel(" Stock:")); dialogo.add(txtStk);
+    dialogo.add(new JLabel(" Nuevo Margen %:")); dialogo.add(cbMargen);
+
+    JButton btnConfirmar = new JButton("Guardar Cambios");
+    btnConfirmar.addActionListener(ev -> {
+        try {
+            double nuevoCosto = Double.parseDouble(txtCos.getText());
+            int nuevoStock = Integer.parseInt(txtStk.getText());
+            double nuevoMargen = Double.parseDouble(cbMargen.getSelectedItem().toString());
+
+            // Creamos el objeto con los cambios (el constructor calcula el nuevo precio_venta)
+            Producto pEditado = new Producto(codigo, txtNom.getText(), nuevoCosto, nuevoStock, nuevoMargen);
+            
+            ProductoDAO.actualizarProducto(pEditado);
+            actualizarTabla();
+            dialogo.dispose(); // Cerramos la ventanita
+            JOptionPane.showMessageDialog(this, "¡Producto actualizado!");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(dialogo, "Datos inválidos");
+        }
+    });
+
+    dialogo.add(new JLabel("")); // Espacio
+    dialogo.add(btnConfirmar);
+    dialogo.setVisible(true);
+}
 }

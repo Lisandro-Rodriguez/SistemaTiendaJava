@@ -63,4 +63,43 @@ public class ProductoDAO {
     }
     return lista;
     }
+
+    //para actualizar, borrar datos de la tabla
+
+    // Método para BORRAR un producto por su código
+public static void eliminarProducto(String codigo) {
+    String sql = "DELETE FROM productos WHERE codigo_barras = ?";
+
+    try (Connection conn = ConexionDB.conectar();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setString(1, codigo);
+        pstmt.executeUpdate();
+        System.out.println("Producto eliminado de la BD.");
+
+    } catch (SQLException e) {
+        System.out.println("Error al eliminar: " + e.getMessage());
+    }
+}
+
+    // Método para ACTUALIZAR datos (Nombre, Costo, Stock)
+public static void actualizarProducto(Producto p) {
+    String sql = "UPDATE productos SET nombre = ?, precio_costo = ?, precio_venta = ?, stock = ? WHERE codigo_barras = ?";
+
+    try (Connection conn = ConexionDB.conectar();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setString(1, p.getNombre());
+        pstmt.setDouble(2, p.getPrecioCosto());
+        pstmt.setDouble(3, p.getPrecioVenta());
+        pstmt.setInt(4, p.getStock());
+        pstmt.setString(5, p.getCodigoBarras());
+
+        pstmt.executeUpdate();
+        System.out.println("Producto actualizado en la BD.");
+
+    } catch (SQLException e) {
+        System.out.println("Error al actualizar: " + e.getMessage());
+    }
+}
 }
