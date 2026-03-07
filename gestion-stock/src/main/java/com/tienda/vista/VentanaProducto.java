@@ -9,13 +9,13 @@ import java.awt.*;
 import com.tienda.Modelo.Producto; 
 import com.tienda.db.ProductoDAO;
 import java.util.List;
+
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.FlatLaf; 
+import com.formdev.flatlaf.FlatLaf;
 
 public class VentanaProducto extends JFrame {
     
-    // --- VARIABLES GLOBALES ---
     private JTabbedPane pestañas;
     
     // Pestaña Registro
@@ -37,32 +37,64 @@ public class VentanaProducto extends JFrame {
     // Pestaña Historial y Pagos
     private JComboBox<String> cbMetodoPago; 
     private DefaultTableModel modeloHistorial;
+    
+    // ¡NUEVO! Guardamos el rol para saber qué permisos darle en otras pestañas
+    private String rolActual; 
 
-    public VentanaProducto() {
-        setTitle("Sistema de Gestión de Stock y Ventas");
-        setSize(950, 700); 
+    public VentanaProducto(String rol) {
+        this.rolActual = rol; // Guardamos el rol apenas entra
+
+        try {
+            UIManager.setLookAndFeel(new FlatLightLaf());
+        } catch (Exception ex) {
+            System.err.println("No se pudo cargar FlatLaf");
+        }
+
+        setTitle("Sistema de Gestión de Stock y Ventas - Usuario: " + rol);
+        setSize(1000, 700); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         pestañas = new JTabbedPane();
 
-        crearPestañaRegistro();
-        crearPestañaInventario();
-        crearPestañaVentas();
-        crearPestañaHistorial(); 
+        // Control de pestañas según el rol
+        if (rol.equals("ADMIN")) {
+            crearPestañaRegistro();
+            crearPestañaInventario();
+            crearPestañaVentas();
+            crearPestañaHistorial(); 
+        } else if (rol.equals("CAJERO")) {
+            crearPestañaVentas();
+            crearPestañaInventario(); // El cajero la ve, pero ahora bloquearemos su edición
+        }
 
-        // --- BARRA SUPERIOR (RELOJ Y MODO OSCURO) ---
+        // --- BARRA SUPERIOR (RELOJ, MODO OSCURO Y CERRAR SESIÓN) ---
         JPanel panelTop = new JPanel(new BorderLayout());
-        panelTop.setBorder(new EmptyBorder(5, 15, 5, 15));
+        panelTop.setBorder(new EmptyBorder(10, 15, 10, 15));
+
+        // Botón Cerrar Sesión
+        JButton btnCerrarSesion = new JButton("🚪 Cerrar Sesión");
+        btnCerrarSesion.setFocusPainted(false);
+        btnCerrarSesion.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnCerrarSesion.setBackground(new Color(231, 76, 60)); // Rojo suave
+        btnCerrarSesion.setForeground(Color.WHITE);
+        btnCerrarSesion.addActionListener(e -> {
+            this.dispose(); // Cierra la ventana principal
+            new VentanaLogin().setVisible(true); // Abre el Login de nuevo
+        });
 
         JToggleButton btnTema = new JToggleButton("🌙 Modo Oscuro");
         btnTema.setFocusPainted(false);
         btnTema.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnTema.addActionListener(e -> aplicarTema(btnTema.isSelected(), btnTema));
 
+        // Agrupamos los dos botones a la izquierda
+        JPanel panelBotonesIzquierda = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        panelBotonesIzquierda.add(btnCerrarSesion);
+        panelBotonesIzquierda.add(btnTema);
+
         JLabel lblReloj = new JLabel();
         lblReloj.setFont(new Font("SansSerif", Font.BOLD, 14));
-        lblReloj.setForeground(new Color(52, 73, 94)); 
         lblReloj.setHorizontalAlignment(SwingConstants.RIGHT);
         
         Timer timer = new Timer(1000, e -> {
@@ -71,19 +103,15 @@ public class VentanaProducto extends JFrame {
         });
         timer.start();
 
-        panelTop.add(btnTema, BorderLayout.WEST);
+        panelTop.add(panelBotonesIzquierda, BorderLayout.WEST);
         panelTop.add(lblReloj, BorderLayout.EAST);
 
         add(panelTop, BorderLayout.NORTH);
         add(pestañas, BorderLayout.CENTER);
+        
+        SwingUtilities.updateComponentTreeUI(this);
     }
 
-    // ==========================================
-    // LÓGICA DEL MODO OSCURO / CLARO
-    // ==========================================
-    // ==========================================
-    // LÓGICA DEL MODO OSCURO (CORREGIDA)
-    // ==========================================
     private void aplicarTema(boolean oscuro, JToggleButton btn) {
         try {
             if (oscuro) {
@@ -93,13 +121,8 @@ public class VentanaProducto extends JFrame {
                 UIManager.setLookAndFeel(new FlatLightLaf());
                 btn.setText("🌙 Modo Oscuro");
             }
-            
-            // 1. Comando especial de FlatLaf para limpiar caché de colores
             FlatLaf.updateUI(); 
-            
-            // 2. Le decimos a la ventana que se vuelva a dibujar entera
             SwingUtilities.updateComponentTreeUI(this);
-            
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al cambiar el tema");
         }
@@ -107,13 +130,12 @@ public class VentanaProducto extends JFrame {
 
     private void crearPestañaRegistro() {
         JPanel panelRegistro = new JPanel(new BorderLayout(10, 10));
-        panelRegistro.setBorder(new EmptyBorder(20, 50, 20, 50));
+        panelRegistro.setBorder(new EmptyBorder(30, 80, 30, 80));
 
-        JPanel form = new JPanel(new GridLayout(5, 2, 10, 20));
-        form.setBorder(new TitledBorder("Datos del Producto"));
+        JPanel form = new JPanel(new GridLayout(5, 2, 15, 25));
+        form.setBorder(BorderFactory.createTitledBorder("Datos del Producto"));
 
-        // Fuente más grande para el formulario
-        Font fuenteFormulario = new Font("SansSerif", Font.PLAIN, 16);
+        Font fuenteFormulario = new Font("SansSerif", Font.PLAIN, 15);
 
         txtCodigoBarras = new JTextField(); txtCodigoBarras.setFont(fuenteFormulario);
         txtNombre = new JTextField(); txtNombre.setFont(fuenteFormulario);
@@ -135,11 +157,8 @@ public class VentanaProducto extends JFrame {
         form.add(lbl5); form.add(comboMargen);
 
         JButton btnGuardar = new JButton("GUARDAR PRODUCTO");
-        btnGuardar.setBackground(new Color(46, 204, 113));
-        btnGuardar.setForeground(Color.WHITE);
         btnGuardar.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnGuardar.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
         btnGuardar.addActionListener(e -> ejecutarGuardado());
 
         panelRegistro.add(form, BorderLayout.CENTER);
@@ -149,12 +168,8 @@ public class VentanaProducto extends JFrame {
     }
 
     private void aplicarEstiloTabla(JTable t) {
-        t.setRowHeight(28); 
+        t.setRowHeight(30); 
         t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13)); 
-        t.getTableHeader().setBackground(new Color(41, 128, 185)); 
-        t.getTableHeader().setForeground(Color.WHITE); 
-        t.setSelectionBackground(new Color(52, 152, 219));
-        t.setSelectionForeground(Color.WHITE);
     }
 
     private void crearPestañaInventario() {
@@ -176,7 +191,7 @@ public class VentanaProducto extends JFrame {
             }
         };
         tabla = new JTable(modeloTabla);
-        aplicarEstiloTabla(tabla); // Aplica el nuevo diseño
+        aplicarEstiloTabla(tabla); 
         
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(modeloTabla);
         tabla.setRowSorter(sorter);
@@ -195,51 +210,56 @@ public class VentanaProducto extends JFrame {
             }
         });
 
-        JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem itemEditar = new JMenuItem("Editar Producto");
-        JMenuItem itemEliminar = new JMenuItem("Eliminar Producto(s)");
+        // ====================================================
+        // MAGIA DE SEGURIDAD: SOLO EL ADMIN PUEDE EDITAR/BORRAR
+        // ====================================================
+        if ("ADMIN".equals(rolActual)) {
+            JPopupMenu popupMenu = new JPopupMenu();
+            JMenuItem itemEditar = new JMenuItem("Editar Producto");
+            JMenuItem itemEliminar = new JMenuItem("Eliminar Producto(s)");
 
-        popupMenu.add(itemEditar);
-        popupMenu.add(itemEliminar);
-        tabla.setComponentPopupMenu(popupMenu);
+            popupMenu.add(itemEditar);
+            popupMenu.add(itemEliminar);
+            tabla.setComponentPopupMenu(popupMenu);
 
-        itemEliminar.addActionListener(e -> {
-            int[] filasVisuales = tabla.getSelectedRows(); 
-            if (filasVisuales.length > 0) {
-                int respuesta = JOptionPane.showConfirmDialog(this, 
-                    "¿Seguro que quieres borrar " + filasVisuales.length + " producto(s)?", "Confirmar", JOptionPane.YES_NO_OPTION);
-                if (respuesta == JOptionPane.YES_OPTION) {
-                    for (int i = 0; i < filasVisuales.length; i++) {
-                        int filaReal = tabla.convertRowIndexToModel(filasVisuales[i]);
-                        String codigo = modeloTabla.getValueAt(filaReal, 0).toString();
-                        ProductoDAO.eliminarProducto(codigo);
-                    }
-                    actualizarTabla(); 
-                    JOptionPane.showMessageDialog(this, "Productos eliminados.");
-                }
-            }
-        });
-
-        itemEditar.addActionListener(e -> {
-            int filaVisual = tabla.getSelectedRow();
-            if (filaVisual != -1) {
-                int filaReal = tabla.convertRowIndexToModel(filaVisual);
-                abrirDialogoEdicion(filaReal);
-            }
-        });
-
-        tabla.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
-                    int filaVisual = tabla.getSelectedRow();
-                    if (filaVisual != -1) {
-                        int filaReal = tabla.convertRowIndexToModel(filaVisual);
-                        abrirDialogoEdicion(filaReal); 
+            itemEliminar.addActionListener(e -> {
+                int[] filasVisuales = tabla.getSelectedRows(); 
+                if (filasVisuales.length > 0) {
+                    int respuesta = JOptionPane.showConfirmDialog(this, "¿Seguro que quieres borrar " + filasVisuales.length + " producto(s)?", "Confirmar", JOptionPane.YES_NO_OPTION);
+                    if (respuesta == JOptionPane.YES_OPTION) {
+                        for (int i = 0; i < filasVisuales.length; i++) {
+                            int filaReal = tabla.convertRowIndexToModel(filasVisuales[i]);
+                            String codigo = modeloTabla.getValueAt(filaReal, 0).toString();
+                            ProductoDAO.eliminarProducto(codigo);
+                        }
+                        actualizarTabla(); 
+                        JOptionPane.showMessageDialog(this, "Productos eliminados.");
                     }
                 }
-            }
-        });
+            });
+
+            itemEditar.addActionListener(e -> {
+                int filaVisual = tabla.getSelectedRow();
+                if (filaVisual != -1) {
+                    int filaReal = tabla.convertRowIndexToModel(filaVisual);
+                    abrirDialogoEdicion(filaReal);
+                }
+            });
+
+            tabla.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                        int filaVisual = tabla.getSelectedRow();
+                        if (filaVisual != -1) {
+                            int filaReal = tabla.convertRowIndexToModel(filaVisual);
+                            abrirDialogoEdicion(filaReal); 
+                        }
+                    }
+                }
+            });
+        }
+        // Si es CAJERO, el bloque de arriba se ignora y la tabla queda de "Solo lectura" pura.
 
         panelInventario.add(new JScrollPane(tabla), BorderLayout.CENTER);
         pestañas.addTab(" Ver Inventario", panelInventario);
@@ -252,10 +272,10 @@ public class VentanaProducto extends JFrame {
         JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         
         JTextField txtEscaneo = new JTextField(15);
-        txtEscaneo.setBorder(new TitledBorder("1. Escanear Código"));
+        txtEscaneo.setBorder(BorderFactory.createTitledBorder("Escanear Código"));
         
         JComboBox<String> cbBusquedaManual = new JComboBox<>();
-        cbBusquedaManual.setBorder(new TitledBorder("2. O Buscar Manualmente"));
+        cbBusquedaManual.setBorder(BorderFactory.createTitledBorder("Buscar Manualmente"));
         cbBusquedaManual.addItem("Seleccione un producto...");
         cbBusquedaManual.setEditable(true);
         
@@ -324,7 +344,7 @@ public class VentanaProducto extends JFrame {
             }
         };
         tablaVenta = new JTable(modeloVenta);
-        aplicarEstiloTabla(tablaVenta); // Aplica el nuevo diseño
+        aplicarEstiloTabla(tablaVenta); 
 
         JPanel panelControlesCarrito = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton btnSumar = new JButton("+ Sumar 1");
@@ -345,13 +365,12 @@ public class VentanaProducto extends JFrame {
         panelCentro.add(panelControlesCarrito, BorderLayout.SOUTH);
 
         JPanel panelAbajo = new JPanel(new GridLayout(2, 3, 15, 10)); 
-        panelAbajo.setBorder(new TitledBorder("Detalles de Pago y Cobro"));
+        panelAbajo.setBorder(BorderFactory.createTitledBorder("Detalles de Pago y Cobro"));
 
         cbMetodoPago = new JComboBox<>(new String[]{"Efectivo", "Transferencia", "Tarjeta Débito", "Tarjeta Crédito"});
         txtPagaCon = new JTextField();
         lblVuelto = new JLabel("Vuelto: $0.00");
-        lblVuelto.setFont(new Font("SansSerif", Font.BOLD, 16));
-        lblVuelto.setForeground(new Color(192, 57, 43));
+        lblVuelto.setFont(new Font("SansSerif", Font.BOLD, 18)); 
 
         panelAbajo.add(new JLabel("Método de Pago:"));
         panelAbajo.add(new JLabel("El cliente abona con ($):"));
@@ -368,8 +387,6 @@ public class VentanaProducto extends JFrame {
         lblTotal.setFont(new Font("SansSerif", Font.BOLD, 22));
         
         JButton btnFinalizar = new JButton("CONFIRMAR VENTA");
-        btnFinalizar.setBackground(new Color(46, 204, 113));
-        btnFinalizar.setForeground(Color.WHITE);
         btnFinalizar.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnFinalizar.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
@@ -474,7 +491,9 @@ public class VentanaProducto extends JFrame {
         cbMetodoPago.setSelectedIndex(0);
         
         actualizarTabla(); 
-        actualizarHistorial(); 
+        if ("ADMIN".equals(rolActual)) {
+            actualizarHistorial(); 
+        }
     }
 
     private void ejecutarGuardado() {
@@ -512,7 +531,7 @@ public class VentanaProducto extends JFrame {
 
         JDialog dialogo = new JDialog(this, "Editar Producto", true);
         dialogo.setLayout(new GridLayout(5, 2, 10, 10));
-        dialogo.setSize(300, 250);
+        dialogo.setSize(350, 280);
         dialogo.setLocationRelativeTo(this);
 
         JTextField txtNom = new JTextField(nombreActual);
@@ -615,7 +634,7 @@ public class VentanaProducto extends JFrame {
             }
         };
         JTable tablaHistorial = new JTable(modeloHistorial);
-        aplicarEstiloTabla(tablaHistorial); // Aplica el nuevo diseño
+        aplicarEstiloTabla(tablaHistorial); 
         
         tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
 

@@ -1,12 +1,14 @@
-package com.tienda; // o el paquete que uses
-import com.tienda.vista.VentanaProducto;
+package com.tienda;
+
+import com.tienda.vista.VentanaLogin; // Importamos el login en lugar del sistema principal
 import javax.swing.SwingUtilities;
 
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            VentanaProducto ventana = new VentanaProducto();
-            ventana.setVisible(true);
+            // Ahora la aplicación arranca pidiendo la contraseña
+            VentanaLogin login = new VentanaLogin();
+            login.setVisible(true);
         });
     }
 }
