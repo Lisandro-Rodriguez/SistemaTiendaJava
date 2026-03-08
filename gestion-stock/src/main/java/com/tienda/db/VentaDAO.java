@@ -7,8 +7,7 @@ import java.util.List;
 public class VentaDAO {
 
     public static void crearTablaVentas() {
-        try (Connection conn = ConexionDB.conectar();
-             Statement stmt = conn.createStatement()) {
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement()) {
             String sql = "CREATE TABLE IF NOT EXISTS ventas ("
                     + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "fecha DATETIME DEFAULT CURRENT_TIMESTAMP,"
@@ -18,20 +17,19 @@ public class VentaDAO {
                     + ");";
             stmt.execute(sql);
 
-            // MAGIA: Agregar columna cajero sin borrar las ventas viejas
+            // Agregamos columnas sin romper ventas viejas
             try { stmt.execute("ALTER TABLE ventas ADD COLUMN cajero TEXT DEFAULT 'Admin'"); } catch(Exception e) {}
+            try { stmt.execute("ALTER TABLE ventas ADD COLUMN cliente TEXT DEFAULT '-'"); } catch(Exception e) {}
         } catch (SQLException e) {}
     }
 
-    public static void registrarVenta(String detalle, double total, String metodo, String cajero) {
+    // AHORA RECIBE EL CLIENTE
+    public static void registrarVenta(String detalle, double total, String metodo, String cajero, String cliente) {
         crearTablaVentas();
-        String sql = "INSERT INTO ventas(detalle, total, metodo_pago, cajero) VALUES(?,?,?,?)";
-        try (Connection conn = ConexionDB.conectar();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, detalle);
-            pstmt.setDouble(2, total);
-            pstmt.setString(3, metodo);
-            pstmt.setString(4, cajero);
+        String sql = "INSERT INTO ventas(detalle, total, metodo_pago, cajero, cliente) VALUES(?,?,?,?,?)";
+        try (Connection conn = ConexionDB.conectar(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, detalle); pstmt.setDouble(2, total); pstmt.setString(3, metodo); 
+            pstmt.setString(4, cajero); pstmt.setString(5, cliente);
             pstmt.executeUpdate();
         } catch (SQLException e) {}
     }
@@ -39,29 +37,22 @@ public class VentaDAO {
     public static List<String[]> obtenerHistorial() {
         crearTablaVentas();
         List<String[]> lista = new ArrayList<>();
-        String sql = "SELECT id, datetime(fecha, 'localtime') as fecha_local, detalle, total, metodo_pago, cajero FROM ventas ORDER BY id DESC";
-        try (Connection conn = ConexionDB.conectar();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+        String sql = "SELECT id, datetime(fecha, 'localtime') as fecha_local, detalle, total, metodo_pago, cajero, cliente FROM ventas ORDER BY id DESC";
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             
-            // Verificamos que exista la columna para no romper el programa
             ResultSetMetaData meta = rs.getMetaData();
-            boolean tieneCajero = false;
-            for (int i = 1; i <= meta.getColumnCount(); i++) {
-                if (meta.getColumnName(i).equalsIgnoreCase("cajero")) tieneCajero = true;
-            }
+            boolean tieneCliente = false;
+            for (int i = 1; i <= meta.getColumnCount(); i++) if (meta.getColumnName(i).equalsIgnoreCase("cliente")) tieneCliente = true;
 
             while (rs.next()) {
-                String cajero = tieneCajero ? rs.getString("cajero") : "Admin";
-                if (cajero == null) cajero = "Admin";
+                String c = rs.getString("cajero");
+                String cli = tieneCliente ? rs.getString("cliente") : "-";
                 
                 lista.add(new String[]{
-                        String.valueOf(rs.getInt("id")),
-                        rs.getString("fecha_local"),
-                        rs.getString("detalle"),
-                        "$" + String.format("%.2f", rs.getDouble("total")),
-                        rs.getString("metodo_pago"),
-                        cajero // ¡La nueva columna!
+                        String.valueOf(rs.getInt("id")), rs.getString("fecha_local"),
+                        cli == null ? "-" : cli, // Columna de CLIENTE nueva
+                        rs.getString("detalle"), "$" + String.format("%.2f", rs.getDouble("total")),
+                        rs.getString("metodo_pago"), c == null ? "Admin" : c
                 });
             }
         } catch (SQLException e) {}
@@ -71,9 +62,7 @@ public class VentaDAO {
     public static double obtenerTotalVentasHistorico() {
         crearTablaVentas();
         String sql = "SELECT SUM(total) as total FROM ventas";
-        try (Connection conn = ConexionDB.conectar();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+        try (Connection conn = ConexionDB.conectar(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             if (rs.next()) return rs.getDouble("total");
         } catch (SQLException e) { }
         return 0;
