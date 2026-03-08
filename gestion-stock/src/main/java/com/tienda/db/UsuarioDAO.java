@@ -5,6 +5,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList; // Necesario para las listas
+import java.util.List;      // Necesario para las listas
 
 public class UsuarioDAO{
 
@@ -25,7 +27,6 @@ public class UsuarioDAO{
     }
 
      //Admin y un Cajero de prueba si la tabla está vacía
-    
     private static void insertarUsuariosPorDefecto() {
         String sqlCheck = "SELECT COUNT(*) AS total FROM usuarios";
         String sqlInsert = "INSERT INTO usuarios (username, password, rol) VALUES (?, ?, ?)";
@@ -78,5 +79,46 @@ public class UsuarioDAO{
         }
         return null; // Login fallido
     }
+
+    // =========================================================================
+    // NUEVAS FUNCIONES AGREGADAS PARA LA PESTAÑA "GESTIÓN DE USUARIOS" (ADMIN)
+    // =========================================================================
+
+    public static boolean registrarUsuario(String username, String password, String rol) {
+        crearTablaUsuarios();
+        String sql = "INSERT INTO usuarios(username, password, rol) VALUES(?,?,?)";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            pstmt.setString(2, password);
+            pstmt.setString(3, rol);
+            pstmt.executeUpdate();
+            return true; // Se guardó con éxito
+        } catch (SQLException e) {
+            return false; // Falla porque pusiste "username TEXT UNIQUE", ¡lo cual es perfecto para evitar duplicados!
+        }
     }
 
+    public static List<String[]> obtenerTodos() {
+        crearTablaUsuarios();
+        List<String[]> lista = new ArrayList<>();
+        String sql = "SELECT username, rol FROM usuarios";
+        try (Connection conn = ConexionDB.conectar();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                lista.add(new String[]{rs.getString("username"), rs.getString("rol")});
+            }
+        } catch (SQLException e) {}
+        return lista;
+    }
+
+    public static void eliminarUsuario(String username) {
+        String sql = "DELETE FROM usuarios WHERE username = ?";
+        try (Connection conn = ConexionDB.conectar();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {}
+    }
+}

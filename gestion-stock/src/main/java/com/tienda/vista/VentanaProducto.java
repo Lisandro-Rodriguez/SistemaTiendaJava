@@ -8,6 +8,7 @@ import java.awt.*;
 import java.awt.event.*;
 import com.tienda.Modelo.Producto; 
 import com.tienda.db.ProductoDAO;
+import com.tienda.db.UsuarioDAO; // IMPORTANTE: Agregado para usar la base de datos de usuarios
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,14 +40,28 @@ public class VentanaProducto extends JFrame {
     private DefaultTableModel modeloHistorial;
     
     private String rolActual; 
+    private String nombreUsuario; // NUEVO: GUARDA EL NOMBRE DE QUIEN INICIÓ SESIÓN
     
     // Memoria RAM
     private List<Producto> cacheProductos = new ArrayList<>();
     private List<String> cacheTipos = new ArrayList<>();
     private List<String> cacheMarcas = new ArrayList<>();
 
+    // CONSTRUCTOR OFICIAL (Recibe Rol y Nombre de Usuario)
+    public VentanaProducto(String rol, String username) {
+        this.rolActual = rol;
+        this.nombreUsuario = username;
+        iniciarVentana();
+    }
+
+    // CONSTRUCTOR VIEJO (Mantenido para que VentanaLogin no de error todavía)
     public VentanaProducto(String rol) {
         this.rolActual = rol;
+        this.nombreUsuario = "Admin"; 
+        iniciarVentana();
+    }
+
+    private void iniciarVentana() {
         recargarCaches(); 
 
         try {
@@ -55,20 +70,21 @@ public class VentanaProducto extends JFrame {
             System.err.println("No se pudo cargar FlatLaf");
         }
 
-        setTitle("Sistema de Gestión de Stock y Ventas - Usuario: " + rol);
+        setTitle("Sistema POS - Usuario: " + nombreUsuario + " (" + rolActual + ")");
         setSize(1000, 700); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         pestañas = new JTabbedPane();
 
-        if (rol.equals("ADMIN")) {
+        if (rolActual.equals("ADMIN")) {
             crearPestañaDashboard(); 
             crearPestañaRegistro();
             crearPestañaInventario();
             crearPestañaVentas();
             crearPestañaHistorial(); 
-        } else if (rol.equals("CAJERO")) {
+            crearPestañaUsuarios(); // INYECCIÓN: LA NUEVA PESTAÑA PARA EL ADMIN
+        } else if (rolActual.equals("CAJERO")) {
             crearPestañaVentas();
             crearPestañaInventario(); 
         }
@@ -132,6 +148,79 @@ public class VentanaProducto extends JFrame {
             FlatLaf.updateUI(); 
             SwingUtilities.updateComponentTreeUI(this);
         } catch (Exception ex) {}
+    }
+
+    // ==============================================================
+    // NUEVA PESTAÑA: GESTIÓN DE USUARIOS
+    // ==============================================================
+    private void crearPestañaUsuarios() {
+        JPanel panelUsuarios = new JPanel(new BorderLayout(15, 15));
+        panelUsuarios.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        // Formulario Superior para crear cuentas
+        JPanel panelForm = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        panelForm.setBorder(BorderFactory.createTitledBorder("Crear Nueva Cuenta de Empleado"));
+
+        JTextField txtUsuario = new JTextField(12);
+        JPasswordField txtPass = new JPasswordField(12);
+        JComboBox<String> cbRol = new JComboBox<>(new String[]{"CAJERO", "ADMIN"});
+        JButton btnGuardarUser = new JButton("💾 Guardar Usuario");
+        btnGuardarUser.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        panelForm.add(new JLabel("Usuario:")); panelForm.add(txtUsuario);
+        panelForm.add(new JLabel("Contraseña:")); panelForm.add(txtPass);
+        panelForm.add(new JLabel("Rol:")); panelForm.add(cbRol);
+        panelForm.add(btnGuardarUser);
+
+        // Tabla de cuentas existentes
+        String[] cols = {"NOMBRE DE USUARIO", "NIVEL DE ACCESO (ROL)"};
+        DefaultTableModel modUsers = new DefaultTableModel(cols, 0) { public boolean isCellEditable(int r, int c) { return false; } };
+        JTable tablaUsers = new JTable(modUsers);
+        aplicarEstiloTabla(tablaUsers);
+        
+        Runnable refrescarTablaUsuarios = () -> {
+            modUsers.setRowCount(0);
+            for (String[] u : UsuarioDAO.obtenerTodos()) modUsers.addRow(u);
+        };
+        refrescarTablaUsuarios.run();
+
+        btnGuardarUser.addActionListener(e -> {
+            String u = txtUsuario.getText().trim();
+            String p = new String(txtPass.getPassword()).trim();
+            if (u.isEmpty() || p.isEmpty()) { JOptionPane.showMessageDialog(this, "El usuario y contraseña son obligatorios"); return; }
+            
+            if (UsuarioDAO.registrarUsuario(u, p, cbRol.getSelectedItem().toString())) {
+                JOptionPane.showMessageDialog(this, "¡Cuenta creada exitosamente!");
+                txtUsuario.setText(""); txtPass.setText("");
+                refrescarTablaUsuarios.run();
+            } else {
+                JOptionPane.showMessageDialog(this, "El nombre de usuario '" + u + "' ya existe.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        // Menú clic derecho para borrar
+        JPopupMenu pop = new JPopupMenu();
+        JMenuItem itemDel = new JMenuItem("Eliminar Cuenta");
+        pop.add(itemDel);
+        tablaUsers.setComponentPopupMenu(pop);
+        
+        itemDel.addActionListener(e -> {
+            int row = tablaUsers.getSelectedRow();
+            if (row != -1) {
+                String userToDel = modUsers.getValueAt(row, 0).toString();
+                if (userToDel.equalsIgnoreCase(nombreUsuario)) { JOptionPane.showMessageDialog(this, "No puedes borrar tu propia cuenta mientras la usas"); return; }
+                if (userToDel.equalsIgnoreCase("admin")) { JOptionPane.showMessageDialog(this, "El 'admin' maestro no se puede borrar"); return; }
+                
+                if (JOptionPane.showConfirmDialog(this, "¿Borrar la cuenta de " + userToDel + "?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                    UsuarioDAO.eliminarUsuario(userToDel);
+                    refrescarTablaUsuarios.run();
+                }
+            }
+        });
+
+        panelUsuarios.add(panelForm, BorderLayout.NORTH);
+        panelUsuarios.add(new JScrollPane(tablaUsers), BorderLayout.CENTER);
+        pestañas.addTab("👥 Gestión Usuarios", panelUsuarios);
     }
 
     private void crearPestañaDashboard() {
@@ -636,7 +725,10 @@ public class VentanaProducto extends JFrame {
             ProductoDAO.reducirStock(cod, cant);
             resumen.append(cant).append("x ").append(modeloVenta.getValueAt(i, 1)).append(" | ");
         }
-        com.tienda.db.VentaDAO.registrarVenta(resumen.toString(), totalVenta, cbMetodoPago.getSelectedItem().toString());
+        
+        // INYECCIÓN: PASAMOS EL NOMBRE DE USUARIO A LA VENTA
+        com.tienda.db.VentaDAO.registrarVenta(resumen.toString(), totalVenta, cbMetodoPago.getSelectedItem().toString(), nombreUsuario);
+        
         JOptionPane.showMessageDialog(this, "Venta realizada con éxito");
         
         modeloVenta.setRowCount(0); totalVenta = 0;
@@ -699,7 +791,8 @@ public class VentanaProducto extends JFrame {
         panelArribaHistorial.add(btnActualizarHistorial);
         panelHistorial.add(panelArribaHistorial, BorderLayout.NORTH);
 
-        String[] cols = {"Nº TICKET", "FECHA Y HORA", "DETALLE DE PRODUCTOS", "TOTAL", "MÉTODO PAGO"};
+        // INYECCIÓN: AÑADIDA LA COLUMNA "CAJERO"
+        String[] cols = {"Nº TICKET", "FECHA Y HORA", "DETALLE DE PRODUCTOS", "TOTAL", "MÉTODO PAGO", "CAJERO"};
         modeloHistorial = new DefaultTableModel(cols, 0) { public boolean isCellEditable(int r, int c) { return false; } };
         JTable tablaHistorial = new JTable(modeloHistorial);
         aplicarEstiloTabla(tablaHistorial); tablaHistorial.getColumnModel().getColumn(2).setPreferredWidth(300);
@@ -731,7 +824,6 @@ public class VentanaProducto extends JFrame {
     }
 
     // CÁLCULO DE VUELTO 
-   
     private void calcularVuelto() {
         try {
             if (txtPagaCon.getText().trim().isEmpty()) { 

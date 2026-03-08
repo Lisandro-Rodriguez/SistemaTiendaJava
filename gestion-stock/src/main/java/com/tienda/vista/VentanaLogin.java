@@ -3,89 +3,118 @@ package com.tienda.vista;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import com.tienda.db.UsuarioDAO;
+import com.formdev.flatlaf.FlatLightLaf;
 
 public class VentanaLogin extends JFrame {
 
     private JTextField txtUsuario;
     private JPasswordField txtPassword;
+    private JButton btnIngresar;
 
     public VentanaLogin() {
-        setTitle("🔑 Acceso al Sistema POS");
-        setSize(400, 250);
+        // Asegurarnos de que el diseño moderno esté cargado desde el principio
+        try {
+            UIManager.setLookAndFeel(new FlatLightLaf());
+        } catch (Exception ex) {
+            System.err.println("No se pudo inicializar FlatLaf en el Login");
+        }
+
+        setTitle("Inicio de Sesión - Sistema POS");
+        setSize(400, 500);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null); // Centra la ventana en la pantalla
-        setResizable(false); // No permite cambiar el tamaño
+        setLocationRelativeTo(null);
+        setResizable(false);
 
-        // --- DISEÑO DEL PANEL PRINCIPAL ---
-        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
-        panelPrincipal.setBorder(new EmptyBorder(20, 30, 20, 30));
+        // Panel Principal
+        JPanel panelPrincipal = new JPanel(new BorderLayout());
+        panelPrincipal.setBorder(new EmptyBorder(30, 40, 30, 40));
 
-        // Título de bienvenida
-        JLabel lblTitulo = new JLabel("Bienvenido al Sistema", SwingConstants.CENTER);
-        lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 20));
+        // Título / Logo
+        JLabel lblTitulo = new JLabel("Bienvenido", SwingConstants.CENTER);
+        lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 28));
+        lblTitulo.setBorder(new EmptyBorder(0, 0, 30, 0));
         panelPrincipal.add(lblTitulo, BorderLayout.NORTH);
 
-        // --- FORMULARIO (Usuario y Contraseña) ---
-        JPanel panelFormulario = new JPanel(new GridLayout(2, 2, 10, 15));
+        // Formulario Central
+        JPanel panelFormulario = new JPanel(new GridLayout(4, 1, 10, 10));
         
-        JLabel lblUser = new JLabel("👤 Usuario:");
-        lblUser.setFont(new Font("SansSerif", Font.BOLD, 14));
+        JLabel lblUsuario = new JLabel("Usuario:");
+        lblUsuario.setFont(new Font("SansSerif", Font.PLAIN, 16));
         txtUsuario = new JTextField();
-        txtUsuario.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        txtUsuario.setFont(new Font("SansSerif", Font.PLAIN, 16));
 
-        JLabel lblPass = new JLabel("🔒 Contraseña:");
-        lblPass.setFont(new Font("SansSerif", Font.BOLD, 14));
+        JLabel lblPass = new JLabel("Contraseña:");
+        lblPass.setFont(new Font("SansSerif", Font.PLAIN, 16));
         txtPassword = new JPasswordField();
-        txtPassword.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        txtPassword.setFont(new Font("SansSerif", Font.PLAIN, 16));
 
-        panelFormulario.add(lblUser);
+        panelFormulario.add(lblUsuario);
         panelFormulario.add(txtUsuario);
         panelFormulario.add(lblPass);
         panelFormulario.add(txtPassword);
 
         panelPrincipal.add(panelFormulario, BorderLayout.CENTER);
 
-        // --- BOTÓN DE INGRESAR ---
-        JButton btnIngresar = new JButton("INGRESAR");
-        btnIngresar.setFont(new Font("SansSerif", Font.BOLD, 14));
-        btnIngresar.setBackground(new Color(41, 128, 185)); // Azul elegante
-        btnIngresar.setForeground(Color.WHITE);
+        // Botón Inferior
+        JPanel panelBotones = new JPanel(new BorderLayout());
+        panelBotones.setBorder(new EmptyBorder(30, 0, 0, 0));
+        
+        btnIngresar = new JButton("INGRESAR");
+        btnIngresar.setFont(new Font("SansSerif", Font.BOLD, 16));
+        btnIngresar.setPreferredSize(new Dimension(100, 45));
         btnIngresar.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnIngresar.setBackground(new Color(52, 152, 219));
+        btnIngresar.setForeground(Color.WHITE);
+        btnIngresar.setFocusPainted(false);
         
-        // Al hacer clic o dar ENTER, ejecutamos la función de login
-        btnIngresar.addActionListener(e -> intentarLogin());
+        btnIngresar.addActionListener(e -> iniciarSesion());
         
-        // Hacemos que el "Enter" en la contraseña también inicie sesión
-        txtPassword.addActionListener(e -> intentarLogin());
+        panelBotones.add(btnIngresar, BorderLayout.CENTER);
+        panelPrincipal.add(panelBotones, BorderLayout.SOUTH);
 
-        JPanel panelSur = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        panelSur.setBorder(new EmptyBorder(15, 0, 0, 0));
-        panelSur.add(btnIngresar);
-
-        panelPrincipal.add(panelSur, BorderLayout.SOUTH);
+        // Magia UX: Presionar ENTER para iniciar sesión
+        KeyAdapter enterListener = new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    iniciarSesion();
+                }
+            }
+        };
+        txtUsuario.addKeyListener(enterListener);
+        txtPassword.addKeyListener(enterListener);
 
         add(panelPrincipal);
     }
 
-    private void intentarLogin() {
-        String usuario = txtUsuario.getText().trim();
-        String password = new String(txtPassword.getPassword()); // Extraemos la contraseña segura
+    private void iniciarSesion() {
+        String username = txtUsuario.getText().trim();
+        String password = new String(txtPassword.getPassword()).trim();
 
-        // Llamamos al "Cerebro" de la base de datos
-        String rol = com.tienda.db.UsuarioDAO.autenticarUsuario(usuario, password);
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Por favor, complete todos los campos.", "Campos vacíos", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-        if (rol != null) { // Si entró exitosamente
-            this.dispose(); // Cerramos esta ventanita de Login
+        // ¡AQUÍ CONSULTAMOS A LA BASE DE DATOS REAL!
+        String rol = UsuarioDAO.autenticarUsuario(username, password);
+
+        if (rol != null) {
+            // Cerramos el login
+            this.dispose();
             
-            // Abrimos el sistema principal PASÁNDOLE EL ROL del usuario
-            VentanaProducto app = new VentanaProducto(rol);
-            app.setVisible(true);
+            // ¡MAGIA!: Abrimos la ventana principal, pasándole el ROL y el NOMBRE DE USUARIO
+            SwingUtilities.invokeLater(() -> {
+                new VentanaProducto(rol, username).setVisible(true);
+            });
+            
         } else {
-            // Si le erró al usuario o contraseña
-            JOptionPane.showMessageDialog(this, 
-                "Usuario o Contraseña incorrectos.", 
-                "Error de Acceso", 
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Usuario o contraseña incorrectos.", "Error de Autenticación", JOptionPane.ERROR_MESSAGE);
+            txtPassword.setText(""); // Limpiamos la contraseña por seguridad
+            txtPassword.requestFocus();
         }
     }
 }
