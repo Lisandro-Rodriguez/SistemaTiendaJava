@@ -25,21 +25,16 @@ jpackage ^
   --type exe ^
   --dest instalador ^
   --app-version 1.0.0 ^
-  --vendor "Tu Nombre" ^
+  --vendor "Lisandro Rodriguez" ^
   --description "Sistema POS para kioscos y almacenes" ^
   --win-shortcut ^
   --win-menu ^
   --win-dir-chooser ^
-  --win-per-user-install ^
-  --icon src\main\resources\icono.ico
+  --win-per-user-install
 
 if errorlevel 1 (
     echo.
     echo NOTA: jpackage requiere WiX Toolset instalado para generar .exe
-    echo Descargalo desde: https://wixtoolset.org/
-    echo.
-    echo Alternativa: usa el JAR directamente:
-    echo   java -jar target\SistemaTienda-jar-with-dependencies.jar
     pause
     exit /b 1
 )
