@@ -84,6 +84,12 @@ public class VentanaProducto extends JFrame {
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setMinimumSize(new Dimension(900, 600));
 
+        // Ícono de la app
+        try {
+            java.net.URL iconUrl = getClass().getResource("/icono.png");
+            if (iconUrl != null) setIconImage(new ImageIcon(iconUrl).getImage());
+        } catch (Exception ex) {}
+
         // Confirmar antes de cerrar
         addWindowListener(new WindowAdapter() {
             @Override
@@ -110,6 +116,7 @@ public class VentanaProducto extends JFrame {
             pestanas.addTab("📋 Historial de Ventas",  new PanelHistorial());
             pestanas.addTab("📊 Reporte Cierres",      new PanelCierresCaja());
             pestanas.addTab("🛡️ Gestión Empleados",    new PanelUsuarios(nombreUsuario));
+            pestanas.addTab("⚙️ Configuracion",         new PanelConfiguracion());
         } else {
             crearPestanaVentas();
             pestanas.addTab("👥 Cuentas Corrientes",   new PanelClientes(nombreUsuario, cbClienteVenta));

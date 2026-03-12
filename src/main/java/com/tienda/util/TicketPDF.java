@@ -1,13 +1,23 @@
 package com.tienda.util;
 
-import com.itextpdf.text.*;
-import com.itextpdf.text.pdf.*;
-import com.itextpdf.text.pdf.draw.LineSeparator;
+import java.awt.Desktop;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.awt.Desktop;
 import java.util.List;
 import java.util.prefs.Preferences;
+
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.Chunk;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.Rectangle;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.pdf.draw.LineSeparator;
 
 public class TicketPDF {
 
@@ -23,6 +33,9 @@ public class TicketPDF {
     }
     private static String getTelefono() {
         return Preferences.userRoot().node("tienda").get("telefono", "");
+    }
+    private static String getMensaje() {
+        return Preferences.userRoot().node("tienda").get("mensaje_ticket", "Gracias por su compra!");
     }
 
     public static void generarTicket(String nroTicket, String fecha, String cliente, String cajero,
@@ -162,7 +175,7 @@ public class TicketPDF {
 
             doc.add(new Chunk(new LineSeparator(0.5f, 100, BaseColor.BLACK, Element.ALIGN_CENTER, -2)));
 
-            Paragraph gracias = new Paragraph("\n¡Gracias por su compra!", fNormal8);
+            Paragraph gracias = new Paragraph("\n" + getMensaje(), fNormal8);
             gracias.setAlignment(Element.ALIGN_CENTER);
             doc.add(gracias);
 

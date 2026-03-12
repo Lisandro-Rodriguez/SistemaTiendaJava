@@ -6,6 +6,7 @@ com\tienda\vista\PanelDashboard$3.class
 com\tienda\vista\VentanaProducto.class
 com\tienda\vista\VentanaLogin$1.class
 com\tienda\vista\VentanaProducto$3.class
+com\tienda\vista\PanelConfiguracion.class
 com\tienda\vista\VentanaProducto$13.class
 com\tienda\db\VentaDAO.class
 com\tienda\vista\PanelClientes$3.class

@@ -30,11 +30,16 @@ jpackage ^
   --win-shortcut ^
   --win-menu ^
   --win-dir-chooser ^
-  --win-per-user-install
+  --win-per-user-install ^
+  --icon src\main\resources\icono.ico
 
 if errorlevel 1 (
     echo.
     echo NOTA: jpackage requiere WiX Toolset instalado para generar .exe
+    echo Descargalo desde: https://wixtoolset.org/
+    echo.
+    echo Alternativa: usa el JAR directamente:
+    echo   java -jar target\SistemaTienda-jar-with-dependencies.jar
     pause
     exit /b 1
 )

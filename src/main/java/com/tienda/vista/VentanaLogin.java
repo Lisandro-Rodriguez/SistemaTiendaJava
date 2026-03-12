@@ -12,6 +12,7 @@ import java.awt.Insets;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -42,6 +43,12 @@ public class VentanaLogin extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
+
+        // Ícono de la app
+        try {
+            java.net.URL iconUrl = getClass().getResource("/icono.png");
+            if (iconUrl != null) setIconImage(new ImageIcon(iconUrl).getImage());
+        } catch (Exception ex) {}
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(new Color(245, 247, 250));
