@@ -46,6 +46,7 @@ com\tienda\vista\PanelCierresCaja$1.class
 com\tienda\vista\PanelDashboard$2.class
 com\tienda\vista\VentanaProducto$15.class
 com\tienda\vista\VentanaProducto$4.class
+com\tienda\util\ActualizadorApp.class
 com\tienda\vista\PanelUsuarios$1.class
 com\tienda\vista\VentanaProducto$12.class
 com\tienda\vista\PanelClientes$2.class

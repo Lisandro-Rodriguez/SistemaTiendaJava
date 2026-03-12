@@ -1,0 +1,13 @@
+target/
+*.class
+*.jar
+!src/**/*.jar
+instalador/
+reportes/
+tickets/
+*.db
+.classpath
+.project
+.settings/
+.idea/
+*.iml
